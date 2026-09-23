@@ -121,6 +121,10 @@
 #include "soh/config/ConfigUpdaters.h"
 #include "soh/ShipInit.hpp"
 
+#ifdef __EMSCRIPTEN__
+#include "soh/web/WebUtils.h"
+#endif
+
 bool SoH_HandleConfigDrop(char* filePath);
 
 OTRGlobals* OTRGlobals::Instance;
@@ -1453,8 +1457,15 @@ bool VerifyArchiveVersion(OTRVersion version) {
 }
 
 extern "C" void InitOTR(int argc, char* argv[]) {
+#ifdef __EMSCRIPTEN__
+    WebStorage_Mount();
+#endif
     OTRGlobals::Instance = new OTRGlobals();
     OTRGlobals::Instance->RunExtract(argc, argv);
+#ifdef __EMSCRIPTEN__
+    // A freshly extracted archive is large; persist it now rather than on the first periodic sync.
+    WebStorage_Sync();
+#endif
 
     OTRGlobals::Instance->Initialize();
     CustomMessageManager::Instance = new CustomMessageManager();
@@ -1560,6 +1571,9 @@ extern "C" void DeinitOTR() {
     sohFast3dWindow = nullptr;
 
     OTRGlobals::Instance->context = nullptr;
+#ifdef __EMSCRIPTEN__
+    WebStorage_SyncNoWait();
+#endif
 }
 
 #ifdef _WIN32
@@ -1601,6 +1615,9 @@ extern "C" uint64_t GetUnixTimestamp() {
 }
 
 extern "C" void Graph_StartFrame() {
+#ifdef __EMSCRIPTEN__
+    WebStorage_PeriodicSync();
+#endif
 #ifndef __WIIU__
     using Ship::KbScancode;
     int32_t dwScancode = OTRGlobals::Instance->context->GetWindow()->GetLastScancode();

@@ -6,6 +6,9 @@
 #endif
 #include "Extract.h"
 #include "portable-file-dialogs.h"
+#ifdef __EMSCRIPTEN__
+#include "soh/web/WebUtils.h"
+#endif
 #include <ship/utils/binarytools/BitConverter.h>
 #include "soh/ShipUtils.h"
 #include "variables.h"
@@ -317,6 +320,12 @@ bool Extractor::GetRomPathFromBox() {
         return false;
     }
     mCurrentRomPath = nameBuffer;
+#elif defined(__EMSCRIPTEN__)
+    const char* romPath = "/tmp/rom.z64";
+    if (!WebFilePicker_PickInto("Choose your Ocarina of Time ROM (.z64, .n64 or .v64).", ".z64,.n64,.v64", romPath)) {
+        return false;
+    }
+    mCurrentRomPath = romPath;
 #else
     auto selection = pfd::open_file("Select a file", mSearchPath, { "N64 Roms", "*.z64 *.n64 *.v64" }).result();
 

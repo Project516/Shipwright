@@ -1,0 +1,26 @@
+#pragma once
+#ifdef __EMSCRIPTEN__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+// Mounts IndexedDB-backed storage at the app directory and loads its contents.
+// Call before anything reads or writes the app directory.
+void WebStorage_Mount(void);
+// Writes the app directory back to IndexedDB and waits for it to finish.
+void WebStorage_Sync(void);
+// Same write without waiting, for the quit path where the runtime is going away.
+void WebStorage_SyncNoWait(void);
+// Called once per frame; syncs every few seconds so saves and settings survive a closed tab.
+void WebStorage_PeriodicSync(void);
+
+// Shows an in-page file prompt and copies the chosen file to destPath.
+// Returns 0 when the user cancels or the file cannot be written.
+int WebFilePicker_PickInto(const char* title, const char* accept, const char* destPath);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif // __EMSCRIPTEN__

@@ -167,6 +167,10 @@ set(INCLUDE_MPQ_SUPPORT ON)
 ################################################################################
 add_compile_definitions(CONTROLLERBUTTONS_T=uint32_t)
 
+if(EMSCRIPTEN)
+    include(CMake/web.cmake)
+endif()
+
 ################################################################################
 # Sub-projects
 ################################################################################
@@ -175,6 +179,14 @@ target_compile_options(libultraship PRIVATE "${WARNING_OVERRIDE}")
 target_compile_definitions(libultraship PUBLIC INCLUDE_MPQ_SUPPORT)
 add_subdirectory(ZAPDTR/ZAPD ${CMAKE_BINARY_DIR}/ZAPD)
 add_subdirectory(OTRExporter)
+if(EMSCRIPTEN)
+    # The browser build extracts ROMs with ZAPDLib in-process, so the standalone
+    # ZAPD tool is not needed, and exporting every symbol would defeat dead code removal.
+    set_target_properties(ZAPD PROPERTIES EXCLUDE_FROM_ALL TRUE)
+    get_target_property(ZAPDLIB_LINK_OPTIONS ZAPDLib INTERFACE_LINK_OPTIONS)
+    list(REMOVE_ITEM ZAPDLIB_LINK_OPTIONS -Wl,-export-dynamic)
+    set_target_properties(ZAPDLib PROPERTIES INTERFACE_LINK_OPTIONS "${ZAPDLIB_LINK_OPTIONS}")
+endif()
 add_subdirectory(soh)
 
 set_property(TARGET soh PROPERTY APPIMAGE_DESKTOP_FILE_TERMINAL YES)
