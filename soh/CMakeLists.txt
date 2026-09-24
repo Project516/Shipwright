@@ -781,6 +781,17 @@ if(EMSCRIPTEN)
     endif()
     set(SOH_WEB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/soh/web")
 
+    # Each of these is one large table built once at startup. With Emscripten's exception
+    # handling, compiling them at -O1 or above needs over 4 GB per file.
+    set(SOH_WEB_RANDO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/randomizer")
+    file(GLOB SOH_WEB_TABLE_SOURCES
+        "${SOH_WEB_RANDO_DIR}/3drando/hint_list.cpp"
+        "${SOH_WEB_RANDO_DIR}/3drando/hint_list/*.cpp"
+        "${SOH_WEB_RANDO_DIR}/location_list.cpp"
+        "${SOH_WEB_RANDO_DIR}/item_list.cpp"
+    )
+    set_source_files_properties(${SOH_WEB_TABLE_SOURCES} PROPERTIES COMPILE_OPTIONS "-O0")
+
     set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "soh" SUFFIX ".html")
     target_link_options(${PROJECT_NAME} PRIVATE
         -sUSE_WEBGL2=1
