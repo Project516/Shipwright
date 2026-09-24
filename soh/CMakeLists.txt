@@ -780,6 +780,12 @@ if(EMSCRIPTEN)
         message(FATAL_ERROR "soh.o2r not found at ${SOH_WEB_PORT_ARCHIVE}. Build the GenerateSohOtr target natively first, or set SOH_WEB_PORT_ARCHIVE.")
     endif()
     set(SOH_WEB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/soh/web")
+    # Preload a copy made at configure time. The repo-root soh.o2r is also a byproduct of the
+    # ExtractAssets target, so any build edge on it makes ninja run ROM extraction to "rebuild" it.
+    # Re-run cmake after replacing soh.o2r.
+    set(SOH_WEB_BUNDLED_ARCHIVE "${CMAKE_CURRENT_BINARY_DIR}/web/soh.o2r")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/web")
+    file(COPY_FILE "${SOH_WEB_PORT_ARCHIVE}" "${SOH_WEB_BUNDLED_ARCHIVE}" ONLY_IF_DIFFERENT)
 
     # Each of these is one large table built once at startup. With Emscripten's exception
     # handling, compiling them at -O1 or above needs over 4 GB per file.
@@ -814,7 +820,7 @@ if(EMSCRIPTEN)
         -sEXPORTED_RUNTIME_METHODS=FS,ccall,cwrap,UTF8ToString,stringToUTF8
         -lidbfs.js
         "SHELL:--shell-file ${SOH_WEB_DIR}/shell.html"
-        "SHELL:--preload-file ${SOH_WEB_PORT_ARCHIVE}@/soh.o2r"
+        "SHELL:--preload-file ${SOH_WEB_BUNDLED_ARCHIVE}@/soh.o2r"
         "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/soh/assets/extractor@/assets"
         "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/soh/assets/xml@/assets/xml"
         "SHELL:--preload-file ${CMAKE_BINARY_DIR}/gamecontrollerdb.txt@/gamecontrollerdb.txt"
@@ -822,7 +828,7 @@ if(EMSCRIPTEN)
     set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY LINK_DEPENDS
         "${SOH_WEB_DIR}/shell.html"
         "${SOH_WEB_DIR}/asyncify-remove.txt"
-        "${SOH_WEB_PORT_ARCHIVE}"
+        "${SOH_WEB_BUNDLED_ARCHIVE}"
     )
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SOH_WEB_DIR}/coi-serviceworker.js" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/coi-serviceworker.js"
