@@ -15,6 +15,11 @@ void WebStorage_SyncNoWait(void);
 // Called once per frame; syncs every few seconds so saves and settings survive a closed tab.
 void WebStorage_PeriodicSync(void);
 
+// Yes/no question for code that would use SDL_ShowMessageBox, which SDL does not
+// implement in the browser. Blocks like SDL's alert() fallback for simple boxes.
+// Returns 1 for yes.
+int WebConfirm(const char* title, const char* text);
+
 // Shows an in-page file prompt and copies the chosen file to destPath.
 // Returns 0 when the user cancels or the file cannot be written.
 int WebFilePicker_PickInto(const char* title, const char* accept, const char* destPath);

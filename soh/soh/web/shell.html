@@ -177,15 +177,8 @@
         el('status').textContent = text;
       },
 
-      monitorRunDependencies: function(left) {
-        if (left === 0) {
-          showOnly('canvas-container');
-          Module.canvas.focus();
-        }
-      },
-
       // Browsers keep audio muted until the page gets a click, so the game waits for Start.
-      // The click creates the audio context SDL adopts, and focuses the canvas.
+      // The click creates the audio context SDL adopts, then shows and focuses the canvas.
       preRun: [function() {
         addRunDependency('user-start');
         setProgress(1);
@@ -202,6 +195,8 @@
             Module.SDL2.audioContext = new AudioContextClass();
             Module.SDL2.audioContext.resume();
           }
+          showOnly('canvas-container');
+          Module.canvas.focus();
           removeRunDependency('user-start');
         }, { once: true });
       }],

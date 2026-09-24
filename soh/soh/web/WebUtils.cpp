@@ -115,6 +115,12 @@ extern "C" void WebStorage_PeriodicSync(void) {
     }
 }
 
+extern "C" int WebConfirm(const char* title, const char* text) {
+    // clang-format off
+    return EM_ASM_INT({ return confirm(UTF8ToString($0) + "\n\n" + UTF8ToString($1)) ? 1 : 0; }, title, text);
+    // clang-format on
+}
+
 extern "C" int WebFilePicker_PickInto(const char* title, const char* accept, const char* destPath) {
     return js_pick_into(title, accept, destPath);
 }

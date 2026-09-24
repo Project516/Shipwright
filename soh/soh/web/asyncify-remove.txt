@@ -4,11 +4,14 @@
 Z*::*
 *Exporter::*
 Declaration::*
-ExporterSet::*
-FileWorker::*
 GameConfig::*
 Globals::*
 ImageBackend::*
 OutputFormatter::*
 WarningHandler::*
 tinyxml2::*
+# The randomizer's table builders run once at startup and never suspend. They are
+# compiled at -O0 into huge functions that Asyncify is very slow to instrument.
+Rando::StaticData::HintTable_Init*
+Rando::StaticData::InitItemTable*
+Rando::StaticData::InitLocationTable*

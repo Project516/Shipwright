@@ -721,7 +721,13 @@ void OTRGlobals::RunExtract(int argc, char* argv[]) {
         sohFast3dWindow->StartFrame();
         sohFast3dWindow->RunGuiOnly();
         if (extractionTask.has_value()) {
+#ifdef __EMSCRIPTEN__
+            // The extraction thread's file I/O is proxied to this thread, which serves it while
+            // blocked in a wait but only once per frame otherwise.
+            auto status = extractionTask->wait_for(std::chrono::milliseconds(50));
+#else
             auto status = extractionTask->wait_for(std::chrono::milliseconds(0));
+#endif
             if (status == std::future_status::ready) {
                 try {
                     extractionTask->get();

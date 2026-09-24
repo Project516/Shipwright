@@ -171,6 +171,8 @@ int Extractor::ShowYesNoBox(const char* title, const char* box) {
     int ret;
 #ifdef _WIN32
     ret = MessageBoxA(nullptr, box, title, MB_YESNO | MB_ICONQUESTION);
+#elif defined(__EMSCRIPTEN__)
+    ret = WebConfirm(title, box) ? IDYES : IDNO;
 #else
     SDL_MessageBoxData boxData = { 0 };
     SDL_MessageBoxButtonData buttons[2] = { { 0 } };
