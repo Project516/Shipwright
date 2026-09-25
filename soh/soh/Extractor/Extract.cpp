@@ -702,6 +702,10 @@ bool Extractor::CallZapd(std::string installPath, std::string exportdir, std::at
     argv[21] = "placeholder";
 
     zapd_report(argc, (char**)argv.data(), extractCount, totalExtract);
+#ifdef __EMSCRIPTEN__
+    // The picked ROM sits in browser memory; drop it once its assets are exported.
+    std::filesystem::remove(romPath);
+#endif
 
     std::filesystem::copy(otrFile, exportdir + "/" + otrFile, std::filesystem::copy_options::overwrite_existing);
 
