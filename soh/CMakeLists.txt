@@ -811,6 +811,9 @@ if(EMSCRIPTEN)
         -sDEFAULT_PTHREAD_STACK_SIZE=4194304
         -sPTHREAD_POOL_SIZE=8
         -sEXIT_RUNTIME=1
+        # Binaryen inlines every single-caller function whatever its size. Uncapped, it merges the
+        # randomizer region builders into one function that Asyncify takes hours to process.
+        -sBINARYEN_EXTRA_PASSES=-ocimfs=1000
         -sASYNCIFY=1
         -sASYNCIFY_STACK_SIZE=8388608
         "-sASYNCIFY_REMOVE=@${SOH_WEB_DIR}/asyncify-remove.txt"
