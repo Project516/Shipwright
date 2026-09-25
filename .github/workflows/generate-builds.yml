@@ -331,6 +331,8 @@ jobs:
   build-web:
     needs: generate-soh-otr
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
     - name: Git Checkout
       uses: actions/checkout@v6
