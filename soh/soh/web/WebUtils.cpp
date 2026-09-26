@@ -15,15 +15,20 @@ EM_JS(void, js_idbfs_mount, (const char* cpath), {
     FS.mount(IDBFS, {}, path);
 });
 
-EM_ASYNC_JS(void, js_idbfs_sync, (int populate), {
-    await new Promise(function(resolve) {
+// Returns 0 on success.
+EM_ASYNC_JS(int, js_idbfs_sync, (int populate), {
+    return await new Promise(function(resolve) {
         FS.syncfs(!!populate, function(err) {
             if (err) {
                 console.error('[WebStorage] sync failed:', err);
             }
-            resolve();
+            resolve(err ? 1 : 0);
         });
     });
+});
+
+EM_JS(void, js_alert, (const char* ctext), {
+    alert(UTF8ToString(ctext));
 });
 
 EM_JS(void, js_idbfs_sync_nowait, (), {
@@ -93,6 +98,10 @@ EM_ASYNC_JS(int, js_pick_into, (const char* ctitle, const char* caccept, int max
 });
 // clang-format on
 
+// Writing back mirrors the app directory into IndexedDB, deleting whatever it lacks, so it
+// stays off when loading failed and the directory may be missing saved files.
+static bool sWriteBackEnabled = false;
+
 extern "C" void WebStorage_Mount(void) {
     static bool sMounted = false;
     if (sMounted) {
@@ -100,15 +109,24 @@ extern "C" void WebStorage_Mount(void) {
     }
     sMounted = true;
     js_idbfs_mount(Ship::Context::GetAppDirectoryPath().c_str());
-    js_idbfs_sync(1);
+    if (js_idbfs_sync(1) == 0) {
+        sWriteBackEnabled = true;
+    } else {
+        js_alert("Ship of Harkinian could not load its files from browser storage. "
+                 "Nothing from this session will be saved. Reload the page to try again.");
+    }
 }
 
 extern "C" void WebStorage_Sync(void) {
-    js_idbfs_sync(0);
+    if (sWriteBackEnabled) {
+        js_idbfs_sync(0);
+    }
 }
 
 extern "C" void WebStorage_SyncNoWait(void) {
-    js_idbfs_sync_nowait();
+    if (sWriteBackEnabled) {
+        js_idbfs_sync_nowait();
+    }
 }
 
 extern "C" void WebStorage_PeriodicSync(void) {
