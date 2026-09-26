@@ -120,9 +120,17 @@ extern "C" void WebStorage_Mount(void) {
     }
 }
 
+// A failed write is retried by the next sync; tell the player once it keeps failing.
 extern "C" void WebStorage_Sync(void) {
-    if (sWriteBackEnabled) {
-        js_idbfs_sync(0);
+    static int sFailedWrites = 0;
+    if (!sWriteBackEnabled) {
+        return;
+    }
+    if (js_idbfs_sync(0) == 0) {
+        sFailedWrites = 0;
+    } else if (++sFailedWrites == 3) {
+        js_alert("Ship of Harkinian could not write to browser storage, so recent progress is not saved. "
+                 "The browser may be out of storage space for this site.");
     }
 }
 
