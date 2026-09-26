@@ -36,7 +36,7 @@ EM_JS(void, js_idbfs_sync_nowait, (), {
 
 // Safari only opens a file dialog from inside a user gesture, and the game loop is not one,
 // so this shows an in-page prompt and opens the dialog from its button's click handler.
-EM_ASYNC_JS(int, js_pick_into, (const char* ctitle, const char* caccept, const char* cdest), {
+EM_ASYNC_JS(int, js_pick_into, (const char* ctitle, const char* caccept, int maxBytes, const char* cdest), {
     var title = UTF8ToString(ctitle);
     var accept = UTF8ToString(caccept);
     var dest = UTF8ToString(cdest);
@@ -65,6 +65,11 @@ EM_ASYNC_JS(int, js_pick_into, (const char* ctitle, const char* caccept, const c
         input.addEventListener('change', function(evt) {
             var file = evt.target.files[0];
             if (!file) { finish(0); return; }
+            if (file.size > maxBytes) {
+                label.textContent = file.name + ' is too large to be a ROM. Choose another file.';
+                input.value = '';
+                return;
+            }
             label.textContent = 'Reading ' + file.name + '...';
             file.arrayBuffer().then(function(buf) {
                 try {
@@ -121,8 +126,8 @@ extern "C" int WebConfirm(const char* title, const char* text) {
     // clang-format on
 }
 
-extern "C" int WebFilePicker_PickInto(const char* title, const char* accept, const char* destPath) {
-    return js_pick_into(title, accept, destPath);
+extern "C" int WebFilePicker_PickInto(const char* title, const char* accept, int maxBytes, const char* destPath) {
+    return js_pick_into(title, accept, maxBytes, destPath);
 }
 
 #endif // __EMSCRIPTEN__

@@ -8,6 +8,10 @@
 #include "portable-file-dialogs.h"
 #ifdef __EMSCRIPTEN__
 #include "soh/web/WebUtils.h"
+// Where the browser file picker copies the chosen ROM.
+static const char* const sWebPickedRomPath = "/tmp/rom.z64";
+// Largest supported ROM, so the picker can refuse other files before reading them.
+static const int sWebMaxRomBytes = 64 * 1024 * 1024;
 #endif
 #include <ship/utils/binarytools/BitConverter.h>
 #include "soh/ShipUtils.h"
@@ -323,11 +327,11 @@ bool Extractor::GetRomPathFromBox() {
     }
     mCurrentRomPath = nameBuffer;
 #elif defined(__EMSCRIPTEN__)
-    const char* romPath = "/tmp/rom.z64";
-    if (!WebFilePicker_PickInto("Choose your Ocarina of Time ROM (.z64, .n64 or .v64).", ".z64,.n64,.v64", romPath)) {
+    if (!WebFilePicker_PickInto("Choose your Ocarina of Time ROM (.z64, .n64 or .v64).", ".z64,.n64,.v64",
+                                sWebMaxRomBytes, sWebPickedRomPath)) {
         return false;
     }
-    mCurrentRomPath = romPath;
+    mCurrentRomPath = sWebPickedRomPath;
 #else
     auto selection = pfd::open_file("Select a file", mSearchPath, { "N64 Roms", "*.z64 *.n64 *.v64" }).result();
 
@@ -703,8 +707,10 @@ bool Extractor::CallZapd(std::string installPath, std::string exportdir, std::at
 
     zapd_report(argc, (char**)argv.data(), extractCount, totalExtract);
 #ifdef __EMSCRIPTEN__
-    // The picked ROM sits in browser memory; drop it once its assets are exported.
-    std::filesystem::remove(romPath);
+    // A picked ROM is a copy in browser memory; drop it once its assets are exported.
+    if (mCurrentRomPath == sWebPickedRomPath) {
+        std::filesystem::remove(romPath);
+    }
 #endif
 
     std::filesystem::copy(otrFile, exportdir + "/" + otrFile, std::filesystem::copy_options::overwrite_existing);

@@ -21,8 +21,9 @@ void WebStorage_PeriodicSync(void);
 int WebConfirm(const char* title, const char* text);
 
 // Shows an in-page file prompt and copies the chosen file to destPath.
+// Files over maxBytes are refused before they are read, and the prompt stays open.
 // Returns 0 when the user cancels or the file cannot be written.
-int WebFilePicker_PickInto(const char* title, const char* accept, const char* destPath);
+int WebFilePicker_PickInto(const char* title, const char* accept, int maxBytes, const char* destPath);
 
 #ifdef __cplusplus
 }
