@@ -1,0 +1,12 @@
+# Functions Asyncify must not instrument. ZAPD and OTRExporter run on the extraction
+# thread and never suspend; instrumenting them only bloats the wasm and can overflow
+# the worker stack in Safari.
+Z*::*
+*Exporter::*
+Declaration::*
+GameConfig::*
+Globals::*
+ImageBackend::*
+OutputFormatter::*
+WarningHandler::*
+tinyxml2::*

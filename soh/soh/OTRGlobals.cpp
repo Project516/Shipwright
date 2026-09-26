@@ -121,6 +121,10 @@
 #include "soh/config/ConfigUpdaters.h"
 #include "soh/ShipInit.hpp"
 
+#ifdef __EMSCRIPTEN__
+#include "soh/web/WebUtils.h"
+#endif
+
 bool SoH_HandleConfigDrop(char* filePath);
 
 OTRGlobals* OTRGlobals::Instance;
@@ -292,7 +296,15 @@ OTRGlobals::OTRGlobals() {
         BTN_CUSTOM_OCARINA_PITCH_DOWN,
     }));
     context->InitControlDeck(controlDeck);
-    context->InitResourceManager({ portArchivePath }, {}, 3, true);
+#ifdef __EMSCRIPTEN__
+    // Threads on web come from a fixed pool of workers (PTHREAD_POOL_SIZE), and asking for more
+    // blocks the main thread. The loader pool gets hardware_concurrency - reserved - 1 threads, so
+    // reserve enough to keep it at one or two whatever the core count.
+    const int32_t reservedThreads = std::max(3, (int32_t)std::thread::hardware_concurrency() - 3);
+#else
+    const int32_t reservedThreads = 3;
+#endif
+    context->InitResourceManager({ portArchivePath }, {}, reservedThreads, true);
     context->InitConsole();
 
     auto sohInputEditorWindow =
@@ -717,7 +729,13 @@ void OTRGlobals::RunExtract(int argc, char* argv[]) {
         sohFast3dWindow->StartFrame();
         sohFast3dWindow->RunGuiOnly();
         if (extractionTask.has_value()) {
+#ifdef __EMSCRIPTEN__
+            // The extraction thread's file I/O is proxied to this thread, which serves it while
+            // blocked in a wait but only once per frame otherwise.
+            auto status = extractionTask->wait_for(std::chrono::milliseconds(50));
+#else
             auto status = extractionTask->wait_for(std::chrono::milliseconds(0));
+#endif
             if (status == std::future_status::ready) {
                 try {
                     extractionTask->get();
@@ -1453,8 +1471,15 @@ bool VerifyArchiveVersion(OTRVersion version) {
 }
 
 extern "C" void InitOTR(int argc, char* argv[]) {
+#ifdef __EMSCRIPTEN__
+    WebStorage_Mount();
+#endif
     OTRGlobals::Instance = new OTRGlobals();
     OTRGlobals::Instance->RunExtract(argc, argv);
+#ifdef __EMSCRIPTEN__
+    // A freshly extracted archive is large; persist it now rather than on the first periodic sync.
+    WebStorage_Sync();
+#endif
 
     OTRGlobals::Instance->Initialize();
     CustomMessageManager::Instance = new CustomMessageManager();
@@ -1560,6 +1585,9 @@ extern "C" void DeinitOTR() {
     sohFast3dWindow = nullptr;
 
     OTRGlobals::Instance->context = nullptr;
+#ifdef __EMSCRIPTEN__
+    WebStorage_SyncNoWait();
+#endif
 }
 
 #ifdef _WIN32
@@ -1601,6 +1629,9 @@ extern "C" uint64_t GetUnixTimestamp() {
 }
 
 extern "C" void Graph_StartFrame() {
+#ifdef __EMSCRIPTEN__
+    WebStorage_PeriodicSync();
+#endif
 #ifndef __WIIU__
     using Ship::KbScancode;
     int32_t dwScancode = OTRGlobals::Instance->context->GetWindow()->GetLastScancode();

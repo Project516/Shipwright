@@ -773,3 +773,68 @@ wut_create_wuhb(${PROJECT_NAME}
 INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/soh.rpx ${CMAKE_CURRENT_BINARY_DIR}/soh.wuhb DESTINATION . COMPONENT ship)
 
 endif()
+
+if(EMSCRIPTEN)
+    set(SOH_WEB_PORT_ARCHIVE "${CMAKE_SOURCE_DIR}/soh.o2r" CACHE FILEPATH "soh.o2r to bundle into the browser build")
+    if(NOT EXISTS "${SOH_WEB_PORT_ARCHIVE}")
+        message(FATAL_ERROR "soh.o2r not found at ${SOH_WEB_PORT_ARCHIVE}. Build the GenerateSohOtr target natively first, or set SOH_WEB_PORT_ARCHIVE.")
+    endif()
+    set(SOH_WEB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/soh/web")
+    # Preload a copy made at configure time. The repo-root soh.o2r is also a byproduct of the
+    # ExtractAssets target, so any build edge on it makes ninja run ROM extraction to "rebuild" it.
+    # Re-run cmake after replacing soh.o2r.
+    set(SOH_WEB_BUNDLED_ARCHIVE "${CMAKE_CURRENT_BINARY_DIR}/web/soh.o2r")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/web")
+    file(COPY_FILE "${SOH_WEB_PORT_ARCHIVE}" "${SOH_WEB_BUNDLED_ARCHIVE}" ONLY_IF_DIFFERENT)
+
+    # Each of these is one large table built once at startup. With Emscripten's exception
+    # handling, compiling them at -O1 or above needs over 4 GB per file.
+    set(SOH_WEB_RANDO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/soh/Enhancements/randomizer")
+    file(GLOB SOH_WEB_TABLE_SOURCES
+        "${SOH_WEB_RANDO_DIR}/3drando/hint_list.cpp"
+        "${SOH_WEB_RANDO_DIR}/3drando/hint_list/*.cpp"
+        "${SOH_WEB_RANDO_DIR}/location_list.cpp"
+        "${SOH_WEB_RANDO_DIR}/item_list.cpp"
+    )
+    set_source_files_properties(${SOH_WEB_TABLE_SOURCES} PROPERTIES COMPILE_OPTIONS "-O0")
+
+    set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME "soh" SUFFIX ".html")
+    target_link_options(${PROJECT_NAME} PRIVATE
+        -sUSE_WEBGL2=1
+        -sMAX_WEBGL_VERSION=2
+        -sMIN_WEBGL_VERSION=2
+        -sFULL_ES3=1
+        -sINITIAL_MEMORY=268435456
+        -sALLOW_MEMORY_GROWTH=1
+        -sMAXIMUM_MEMORY=4294967296
+        -sSTACK_SIZE=5242880
+        -sDEFAULT_PTHREAD_STACK_SIZE=4194304
+        -sPTHREAD_POOL_SIZE=8
+        -sEXIT_RUNTIME=1
+        # Binaryen inlines every single-caller function whatever its size. Uncapped, it merges the
+        # randomizer region builders into one function that Asyncify takes hours to process.
+        -sBINARYEN_EXTRA_PASSES=-ocimfs=1000
+        -sASYNCIFY=1
+        -sASYNCIFY_STACK_SIZE=8388608
+        "-sASYNCIFY_REMOVE=@${SOH_WEB_DIR}/asyncify-remove.txt"
+        -sASSERTIONS=1
+        -sFORCE_FILESYSTEM=1
+        -sEXPORTED_FUNCTIONS=_main,_malloc,_free
+        -sEXPORTED_RUNTIME_METHODS=FS,ccall,cwrap,UTF8ToString,stringToUTF8
+        -lidbfs.js
+        "SHELL:--shell-file ${SOH_WEB_DIR}/shell.html"
+        "SHELL:--preload-file ${SOH_WEB_BUNDLED_ARCHIVE}@/soh.o2r"
+        "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/soh/assets/extractor@/assets"
+        "SHELL:--preload-file ${CMAKE_SOURCE_DIR}/soh/assets/xml@/assets/xml"
+        "SHELL:--preload-file ${CMAKE_BINARY_DIR}/gamecontrollerdb.txt@/gamecontrollerdb.txt"
+    )
+    set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY LINK_DEPENDS
+        "${SOH_WEB_DIR}/shell.html"
+        "${SOH_WEB_DIR}/asyncify-remove.txt"
+        "${SOH_WEB_BUNDLED_ARCHIVE}"
+    )
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SOH_WEB_DIR}/coi-serviceworker.js" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/coi-serviceworker.js"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/custom/fonts/Montserrat-Regular.ttf" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/Montserrat-Regular.ttf"
+    )
+endif()

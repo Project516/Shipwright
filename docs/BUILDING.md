@@ -287,6 +287,36 @@ cmake --build build-cmake --target clean
 cmake --build build-cmake --target ExtractAssetHeaders
 ```
 
+## Web (WebAssembly)
+
+The browser build uses [Emscripten](https://emscripten.org/) 4.0.12. SDL2, zlib and libpng come from Emscripten ports and the other libraries are fetched by CMake, so only emsdk, CMake 3.26+ and Ninja are needed.
+
+It bundles `soh.o2r`, which is built by the native `GenerateSohOtr` target (see your platform above). The ROM is never bundled: players pick it in the page, it is extracted in the browser, and the resulting `oot.o2r` is kept in the browser's IndexedDB along with saves and settings.
+
+```bash
+# Install and activate emsdk
+git clone https://github.com/emscripten-core/emsdk.git
+./emsdk/emsdk install 4.0.12
+./emsdk/emsdk activate 4.0.12
+source ./emsdk/emsdk_env.sh
+
+# Generate soh.o2r with a native build first, then copy it to the repo root
+cp build-cmake/soh/soh.o2r .
+
+# Configure and build
+emcmake cmake -S . -B build-web -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build-web
+```
+
+Pass `-DSOH_WEB_PORT_ARCHIVE=/path/to/soh.o2r` to use a `soh.o2r` from somewhere else.
+
+The output in `build-web/soh` (`soh.html`, `soh.js`, `soh.wasm`, `soh.data`, `coi-serviceworker.js`, `Montserrat-Regular.ttf`) is a static site. It needs `SharedArrayBuffer`, so it must be served over HTTPS or from `localhost`; `coi-serviceworker.js` adds the cross-origin isolation headers on hosts like GitHub Pages that cannot set them. To try it locally:
+
+```bash
+cd build-web/soh && python3 -m http.server 8080
+# open http://localhost:8080/soh.html
+```
+
 ## Switch
 1. Requires that your build machine is setup with the tools necessary for your platform above
 2. Requires that you have the switch build tools installed
