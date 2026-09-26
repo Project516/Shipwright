@@ -296,7 +296,15 @@ OTRGlobals::OTRGlobals() {
         BTN_CUSTOM_OCARINA_PITCH_DOWN,
     }));
     context->InitControlDeck(controlDeck);
-    context->InitResourceManager({ portArchivePath }, {}, 3, true);
+#ifdef __EMSCRIPTEN__
+    // Threads on web come from a fixed pool of workers (PTHREAD_POOL_SIZE), and asking for more
+    // blocks the main thread. The loader pool gets hardware_concurrency - reserved - 1 threads, so
+    // reserve enough to keep it at one or two whatever the core count.
+    const int32_t reservedThreads = std::max(3, (int32_t)std::thread::hardware_concurrency() - 3);
+#else
+    const int32_t reservedThreads = 3;
+#endif
+    context->InitResourceManager({ portArchivePath }, {}, reservedThreads, true);
     context->InitConsole();
 
     auto sohInputEditorWindow =
