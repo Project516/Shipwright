@@ -192,6 +192,10 @@ set(INCLUDE_MPQ_SUPPORT ON)
 ################################################################################
 add_compile_definitions(CONTROLLERBUTTONS_T=uint32_t)
 
+if(EMSCRIPTEN)
+    include(CMake/web.cmake)
+endif()
+
 ################################################################################
 # Torch (ROM asset extraction)
 ################################################################################
@@ -355,6 +359,10 @@ add_custom_command(
     VERBATIM
 )
 add_custom_target(GenerateSohOtr ALL DEPENDS ${CMAKE_BINARY_DIR}/soh/soh.o2r)
+if(EMSCRIPTEN)
+    # The browser build bundles a soh.o2r made natively; see SOH_WEB_PORT_ARCHIVE.
+    set_target_properties(GenerateSohOtr PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
 
 # ExtractAssets produced soh.o2r as well as the rom archives, so keep doing that.
 add_dependencies(ExtractAssets GenerateSohOtr)

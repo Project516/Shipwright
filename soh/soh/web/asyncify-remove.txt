@@ -1,0 +1,9 @@
+# Functions Asyncify must not instrument. Torch runs on the extraction thread and never
+# suspends; instrumenting it only bloats the wasm and can overflow the worker stack in Safari.
+SohTorch::*
+Companion::*
+OoT::*
+*Factory::*
+*Exporter::*
+YAML::*
+tinyxml2::*
