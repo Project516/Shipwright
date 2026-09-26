@@ -75,8 +75,11 @@ EM_ASYNC_JS(int, js_pick_into, (const char* ctitle, const char* caccept, int max
                 input.value = '';
                 return;
             }
+            // One read at a time; Cancel still works and makes the pending read a no-op.
+            choose.disabled = true;
             label.textContent = 'Reading ' + file.name + '...';
             file.arrayBuffer().then(function(buf) {
+                if (settled) return;
                 try {
                     FS.writeFile(dest, new Uint8Array(buf));
                     finish(1);
