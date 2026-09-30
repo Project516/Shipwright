@@ -81,9 +81,19 @@ def main(argv: list[str]) -> int:
         print(f"{index} is empty", file=sys.stderr)
         return 1
 
-    text = index.read_text(encoding="utf-8", errors="replace")
+    # Every page and stylesheet that shipped, not just index.html.
+    sources = sorted(p for p in site.rglob("*") if p.suffix in (".html", ".css") and p.is_file())
+    if not sources:
+        print(f"no html or css in {site}", file=sys.stderr)
+        return 1
+
     parser = Refs()
-    parser.feed(text)
+    for source in sources:
+        text = source.read_text(encoding="utf-8", errors="replace")
+        parser.feed(text)
+        # A standalone stylesheet is scanned directly, with no style element around it.
+        if source.suffix == ".css":
+            parser.css.append(text)
 
     refs = [r for r in (local_path(v) for v in parser.refs) if r]
     css = "".join(parser.css)
@@ -95,6 +105,7 @@ def main(argv: list[str]) -> int:
         for v in parser.refs
         if v.strip().startswith("/") and not REMOTE.match(v.strip())
     })
+    nested = [p for p in sources if p.parent != site]
 
     if not refs and not root_absolute:
         print("found no local references in index.html, so the check proved nothing", file=sys.stderr)
@@ -102,9 +113,15 @@ def main(argv: list[str]) -> int:
 
     missing = []
     for ref in refs:
-        # A reference may be a directory, in which case it wants an index file.
-        target = site / ref
-        if not (target.is_file() or (target.is_dir() and (target / "index.html").is_file())):
+        # A relative reference in a nested file resolves against that file's directory
+        # first, then against the site root.
+        found = False
+        for base in [p.parent for p in nested] + [site]:
+            target = base / ref
+            if target.is_file() or (target.is_dir() and (target / "index.html").is_file()):
+                found = True
+                break
+        if not found:
             missing.append(ref)
 
     for ref in root_absolute:

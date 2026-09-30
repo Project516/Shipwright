@@ -5,6 +5,10 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+# Nothing here writes to the repository or reads a secret except deploy-web, so the
+# token starts with the least it can do. A job that needs more says so.
+permissions:
+  contents: read
 jobs:
 
   generate-soh-otr:
@@ -332,8 +336,6 @@ jobs:
     needs: generate-soh-otr
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    permissions:
-      contents: read
     steps:
     - name: Git Checkout
       uses: actions/checkout@v6
@@ -570,8 +572,6 @@ jobs:
     needs: generate-soh-otr
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    permissions:
-      contents: read
     steps:
     - name: Git Checkout
       uses: actions/checkout@v6

@@ -388,6 +388,12 @@
       }
     }
 
+    // Safari and the iOS browsers all use the same engine, and Safari is the one that
+    // filters a file list by extension and drops what it cannot classify.
+    function isSafari() {
+      return /^((?!chrome|android|crios|fxios|edgios).)*safari/i.test(navigator.userAgent);
+    }
+
     function formatBytes(bytes) {
       if (bytes < 1024) return bytes + ' B';
       if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -443,8 +449,7 @@
       return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes());
     }
 
-    function renderSlots(generation) {
-      if (generation !== undefined && generation !== menuGeneration) return;
+    function renderSlots() {
       var list = el('slots');
       list.textContent = '';
       var anyUsed = false;
@@ -508,13 +513,13 @@
         if (generation !== menuGeneration) return;
         if (!ok) {
           el('saves-summary').textContent =
-            'Could not read browser storage. Private browsing blocks it, so import will not stick. ' +
-            'Use a normal window, or reload the page.';
+            'Could not read browser storage, so import will not stick. A private window blocks ' +
+            'it, and a browser low on space can too. Try a normal window with space free.';
           el('saves-summary').classList.add('warn');
           return;
         }
         el('saves-summary').classList.remove('warn');
-        renderSlots(generation);
+        renderSlots();
       });
     }
 
@@ -539,9 +544,10 @@
     el('import-saves').addEventListener('click', function() {
       var input = document.createElement('input');
       input.type = 'file';
-      // iPad Safari filters a file list by extension and drops anything it cannot classify,
-      // which hid .sav files. Take anything and judge it by name and content instead.
-      input.accept = '.json,.sav,application/json,application/octet-stream,*/*';
+      // Safari filters a file list by extension and drops what it cannot classify, which hid
+      // .sav files on iPad. Widen the filter only for Safari, and judge the file by name and
+      // content either way.
+      input.accept = isSafari() ? '*/*' : '.json,.sav';
       input.addEventListener('change', function() {
         var file = input.files && input.files[0];
         if (!file) return;
@@ -556,7 +562,8 @@
               summary.classList.add('warn');
               summary.textContent =
                 'This browser will not let the page store files, so the import will not be kept. ' +
-                'Private browsing blocks it. Use a normal window and try again.';
+                'A private window blocks it, and a browser low on space can too. Try again in a ' +
+                'normal window with space free.';
               return;
             }
             importChosenFile(file, buffer, generation, summary);
@@ -625,7 +632,7 @@
       if (landed) summary.textContent = 'Imported into file ' + landed + '.';
       syncIdbfs(false).then(function(ok) {
         if (generation !== menuGeneration) return;
-        renderSlots(generation);
+        renderSlots();
         if (!ok) {
           summary.classList.add('warn');
           summary.textContent =
