@@ -331,6 +331,8 @@
           resolve(false);
           return;
         }
+        // FS.mount and the flag above are synchronous, so a close cannot land between
+        // them. Once this returns, storageMounted is true and unmountStorage will unmount.
         storageMounted = true;
         syncIdbfs(true).then(resolve);
       });
