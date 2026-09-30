@@ -345,6 +345,10 @@
     // after the menu closed cannot write into the mount the game now owns.
     var menuGeneration = 0;
 
+    // Every path that writes to the mounted filesystem syncs before it can be unmounted:
+    // import writes, then syncs, then renders, and clear cache unlinks, then syncs, then
+    // unmounts. Reading never writes. So unmountStorage has nothing outstanding to persist,
+    // and does not sync itself.
     function unmountStorage() {
       // Bumped even when nothing is mounted, so a pending callback that arrives after the
       // menu closed is still discarded.
