@@ -282,9 +282,12 @@
         el(name).classList.toggle('show', name === id);
       });
       var onMenu = id === 'actions';
-      ['progress-wrap', 'spinner', 'note'].forEach(function(name) {
+      // The spinner is hidden once loading is done, so returning to the action list
+      // must not bring it back.
+      ['progress-wrap', 'note'].forEach(function(name) {
         el(name).style.display = onMenu ? '' : 'none';
       });
+      if (!onMenu) el('spinner').style.display = 'none';
     }
 
     // == Save import and export ==============================================
