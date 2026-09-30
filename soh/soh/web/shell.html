@@ -302,13 +302,27 @@
       });
     }
 
+    // Emscripten's FS errors carry a code, which is the only way to tell the expected
+    // EEXIST from a real failure such as the filesystem being full.
+    function isEexist(e) {
+      return e && (e.code === 'EEXIST' || e.errno === 20);
+    }
+
+    function isEnoent(e) {
+      return e && (e.code === 'ENOENT' || e.errno === 44);
+    }
+
     function mountStorage() {
       if (storageMounted) return Promise.resolve(true);
       return new Promise(function(resolve) {
         try {
           FS.mkdir(STORAGE_DIR);
         } catch (e) {
-          // Already there, which is the normal case after a previous visit.
+          if (!isEexist(e)) {
+            console.error('[WebStorage] could not create the storage directory:', e);
+            resolve(false);
+            return;
+          }
         }
         try {
           FS.mount(IDBFS, {}, STORAGE_DIR);
@@ -322,7 +336,14 @@
       });
     }
 
+    // Deferred work checks this before touching the filesystem, so a callback that lands
+    // after the menu closed cannot write into the mount the game now owns.
+    var menuGeneration = 0;
+
     function unmountStorage() {
+      // Bumped even when nothing is mounted, so a pending callback that arrives after the
+      // menu closed is still discarded.
+      menuGeneration++;
       if (!storageMounted) return;
       storageMounted = false;
       try {
@@ -340,7 +361,7 @@
       try {
         FS.mkdir(path);
       } catch (e) {
-        // EEXIST is the expected outcome.
+        if (!isEexist(e)) throw e;
       }
     }
 
@@ -348,6 +369,7 @@
       try {
         return FS.readFile(savePath(n));
       } catch (e) {
+        if (!isEnoent(e)) console.error('[WebSaves] could not read file' + n + ':', e);
         return null;
       }
     }
@@ -356,6 +378,7 @@
       try {
         return FS.stat(savePath(n)).size > 0;
       } catch (e) {
+        if (!isEnoent(e)) console.error('[WebSaves] could not stat file' + n + ':', e);
         return false;
       }
     }
@@ -415,7 +438,8 @@
       return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes());
     }
 
-    function renderSlots() {
+    function renderSlots(generation) {
+      if (generation !== undefined && generation !== menuGeneration) return;
       var list = el('slots');
       list.textContent = '';
       var anyUsed = false;
@@ -471,14 +495,17 @@
       showPanel('saves-panel');
       el('saves-summary').textContent = 'Reading browser storage...';
       el('import-saves').disabled = true;
+      var generation = menuGeneration;
       mountStorage().then(function(ok) {
+        // The menu may have closed, or Start may have taken over the mount, while this ran.
+        if (generation !== menuGeneration) return;
         if (!ok) {
           el('saves-summary').textContent = 'Could not read browser storage. Try reloading the page.';
           el('saves-summary').classList.add('warn');
           return;
         }
         el('saves-summary').classList.remove('warn');
-        renderSlots();
+        renderSlots(generation);
         el('import-saves').disabled = false;
       });
     }
@@ -509,15 +536,20 @@
         var file = input.files && input.files[0];
         if (!file) return;
         var summary = el('saves-summary');
+        var generation = menuGeneration;
         file.arrayBuffer().then(function(buffer) {
+          if (generation !== menuGeneration) return;
+          // Decoded and validated up front, so a bad entry cannot leave half a bundle
+          // written to the mounted filesystem.
+          var writes = [];
+          var landed = 0;
           try {
             if (/\.json$/i.test(file.name)) {
               var bundle = JSON.parse(new TextDecoder().decode(buffer));
               if (bundle.format !== 'soh-web-saves') throw new Error('not a SoH save bundle');
-              ensureDir(SAVE_DIR);
               Object.keys(bundle.files).forEach(function(key) {
                 if (!/^file[123]\.sav$/.test(key)) return;
-                FS.writeFile(SAVE_DIR + '/' + key, base64ToBytes(bundle.files[key]));
+                writes.push({ path: SAVE_DIR + '/' + key, data: base64ToBytes(bundle.files[key]) });
               });
             } else if (/^global\.sav$/i.test(file.name)) {
               throw new Error('global.sav holds settings, not a save');
@@ -532,9 +564,8 @@
                 }
               }
               if (target === 0) target = 1;
-              ensureDir(SAVE_DIR);
-              FS.writeFile(savePath(target), new Uint8Array(buffer));
-              summary.textContent = 'Imported into file ' + target + '.';
+              writes.push({ path: savePath(target), data: new Uint8Array(buffer) });
+              landed = target;
             }
           } catch (e) {
             console.error('[WebSaves] import failed:', e);
@@ -544,7 +575,24 @@
               : 'That file could not be read as a Ship of Harkinian save.';
             return;
           }
+          if (generation !== menuGeneration) return;
+          if (!writes.length) {
+            summary.classList.add('warn');
+            summary.textContent = 'That bundle held no save files.';
+            return;
+          }
+          try {
+            ensureDir(SAVE_DIR);
+            writes.forEach(function(w) { FS.writeFile(w.path, w.data); });
+          } catch (e) {
+            console.error('[WebSaves] import failed:', e);
+            summary.classList.add('warn');
+            summary.textContent = 'The browser refused the write. It may be out of storage space.';
+            return;
+          }
+          if (landed) summary.textContent = 'Imported into file ' + landed + '.';
           syncIdbfs(false).then(function(ok) {
+            if (generation !== menuGeneration) return;
             renderSlots();
             if (!ok) {
               summary.classList.add('warn');
@@ -552,6 +600,7 @@
             }
           });
         }, function() {
+          if (generation !== menuGeneration) return;
           summary.classList.add('warn');
           summary.textContent = 'That file could not be read.';
         });
@@ -582,7 +631,9 @@
       el('cache-confirm').disabled = true;
       var text = el('cache-text');
       text.textContent = 'Checking browser storage...';
+      var generation = menuGeneration;
       mountStorage().then(function(ok) {
+        if (generation !== menuGeneration) return;
         if (!ok) {
           text.textContent = 'Could not read browser storage. Try reloading the page.';
           return;
@@ -601,15 +652,17 @@
     el('cache-cancel').addEventListener('click', closeSaves);
     el('cache-done-ok').addEventListener('click', closeSaves);
     el('cache-confirm').addEventListener('click', function() {
+      var generation = menuGeneration;
       ARCHIVES.forEach(function(name) {
         try {
           FS.unlink(STORAGE_DIR + '/' + name);
         } catch (e) {
-          // Already gone.
+          if (!isEnoent(e)) console.error('[WebStorage] could not delete ' + name + ':', e);
         }
       });
       // Write back so the deletion reaches IndexedDB, not just this session's view.
       syncIdbfs(false).then(function() {
+        if (generation !== menuGeneration) return;
         unmountStorage();
         showPanel('cache-done');
       });
@@ -675,7 +728,7 @@
         var sdl = Module.SDL2;
         if (sdl) {
           if (sdl.audio && sdl.audio.silenceTimer !== undefined) clearInterval(sdl.audio.silenceTimer);
-          if (sdl.audio && sdl.audio.scriptProcessorNode) sdl.audio.scriptProcessorNode.onaudiproc = null;
+          if (sdl.audio && sdl.audio.scriptProcessorNode) sdl.audio.scriptProcessorNode.onaudioprocess = null;
           if (sdl.audioContext) sdl.audioContext.close();
         }
         el('exit-message').textContent = message;
