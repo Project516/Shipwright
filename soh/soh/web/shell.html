@@ -499,19 +499,22 @@
     function openSaves() {
       showPanel('saves-panel');
       el('saves-summary').textContent = 'Reading browser storage...';
-      el('import-saves').disabled = true;
+      // Left enabled throughout. A mount failure, which iPad Safari reports in private
+      // browsing, must not leave this greyed out with no way to retry.
+      el('import-saves').disabled = false;
       var generation = menuGeneration;
       mountStorage().then(function(ok) {
         // The menu may have closed, or Start may have taken over the mount, while this ran.
         if (generation !== menuGeneration) return;
         if (!ok) {
-          el('saves-summary').textContent = 'Could not read browser storage. Try reloading the page.';
+          el('saves-summary').textContent =
+            'Could not read browser storage. Private browsing blocks it, so import will not stick. ' +
+            'Use a normal window, or reload the page.';
           el('saves-summary').classList.add('warn');
           return;
         }
         el('saves-summary').classList.remove('warn');
         renderSlots(generation);
-        el('import-saves').disabled = false;
       });
     }
 
@@ -536,7 +539,9 @@
     el('import-saves').addEventListener('click', function() {
       var input = document.createElement('input');
       input.type = 'file';
-      input.accept = '.json,.sav';
+      // iPad Safari filters a file list by extension and drops anything it cannot classify,
+      // which hid .sav files. Take anything and judge it by name and content instead.
+      input.accept = '.json,.sav,application/json,application/octet-stream,*/*';
       input.addEventListener('change', function() {
         var file = input.files && input.files[0];
         if (!file) return;
@@ -544,65 +549,17 @@
         var generation = menuGeneration;
         file.arrayBuffer().then(function(buffer) {
           if (generation !== menuGeneration) return;
-          // Decoded and validated up front, so a bad entry cannot leave half a bundle
-          // written to the mounted filesystem.
-          var writes = [];
-          var landed = 0;
-          try {
-            if (/\.json$/i.test(file.name)) {
-              var bundle = JSON.parse(new TextDecoder().decode(buffer));
-              if (bundle.format !== 'soh-web-saves') throw new Error('not a SoH save bundle');
-              Object.keys(bundle.files).forEach(function(key) {
-                if (!/^file[123]\.sav$/.test(key)) return;
-                writes.push({ path: SAVE_DIR + '/' + key, data: base64ToBytes(bundle.files[key]) });
-              });
-            } else if (/^global\.sav$/i.test(file.name)) {
-              throw new Error('global.sav holds settings, not a save');
-            } else {
-              // Save files are named after the slot they belong to, so file2.sav goes to
-              // file 2. Anything else takes the first free slot, or file 1 when all are taken.
-              var named = /^file([123])\.sav$/i.exec(file.name);
-              var target = named ? Number(named[1]) : 0;
-              if (target === 0) {
-                for (var n = 1; n <= 3; n++) {
-                  if (!slotIsUsed(n)) { target = n; break; }
-                }
-              }
-              if (target === 0) target = 1;
-              writes.push({ path: savePath(target), data: new Uint8Array(buffer) });
-              landed = target;
-            }
-          } catch (e) {
-            console.error('[WebSaves] import failed:', e);
-            summary.classList.add('warn');
-            summary.textContent = e.message === 'global.sav holds settings, not a save'
-              ? 'That is the settings file, not a save. Import file1.sav, file2.sav or file3.sav.'
-              : 'That file could not be read as a Ship of Harkinian save.';
-            return;
-          }
-          if (generation !== menuGeneration) return;
-          if (!writes.length) {
-            summary.classList.add('warn');
-            summary.textContent = 'That bundle held no save files.';
-            return;
-          }
-          try {
-            ensureDir(SAVE_DIR);
-            writes.forEach(function(w) { FS.writeFile(w.path, w.data); });
-          } catch (e) {
-            console.error('[WebSaves] import failed:', e);
-            summary.classList.add('warn');
-            summary.textContent = 'The browser refused the write. It may be out of storage space.';
-            return;
-          }
-          if (landed) summary.textContent = 'Imported into file ' + landed + '.';
-          syncIdbfs(false).then(function(ok) {
+          // Retried here too, in case the earlier mount failed or the player reopened the menu.
+          mountStorage().then(function(ok) {
             if (generation !== menuGeneration) return;
-            renderSlots();
             if (!ok) {
               summary.classList.add('warn');
-              summary.textContent = 'Imported, but writing to browser storage failed. The browser may be out of space.';
+              summary.textContent =
+                'This browser will not let the page store files, so the import will not be kept. ' +
+                'Private browsing blocks it. Use a normal window and try again.';
+              return;
             }
+            importChosenFile(file, buffer, generation, summary);
           });
         }, function() {
           if (generation !== menuGeneration) return;
@@ -612,6 +569,71 @@
       });
       input.click();
     });
+
+    function importChosenFile(file, buffer, generation, summary) {
+      // Decoded and validated up front, so a bad entry cannot leave half a bundle
+      // written to the mounted filesystem.
+      var writes = [];
+      var landed = 0;
+      try {
+        if (/\.json$/i.test(file.name)) {
+          var bundle = JSON.parse(new TextDecoder().decode(buffer));
+          if (bundle.format !== 'soh-web-saves') throw new Error('not a SoH save bundle');
+          Object.keys(bundle.files).forEach(function(key) {
+            if (!/^file[123]\.sav$/.test(key)) return;
+            writes.push({ path: SAVE_DIR + '/' + key, data: base64ToBytes(bundle.files[key]) });
+          });
+        } else if (/^global\.sav$/i.test(file.name)) {
+          throw new Error('global.sav holds settings, not a save');
+        } else {
+          // Save files are named after the slot they belong to, so file2.sav goes to
+          // file 2. Anything else takes the first free slot, or file 1 when all are taken.
+          var named = /^file([123])\.sav$/i.exec(file.name);
+          var target = named ? Number(named[1]) : 0;
+          if (target === 0) {
+            for (var n = 1; n <= 3; n++) {
+              if (!slotIsUsed(n)) { target = n; break; }
+            }
+          }
+          if (target === 0) target = 1;
+          writes.push({ path: savePath(target), data: new Uint8Array(buffer) });
+          landed = target;
+        }
+      } catch (e) {
+        console.error('[WebSaves] import failed:', e);
+        summary.classList.add('warn');
+        summary.textContent = e.message === 'global.sav holds settings, not a save'
+          ? 'That is the settings file, not a save. Import file1.sav, file2.sav or file3.sav.'
+          : 'That file could not be read as a Ship of Harkinian save.';
+        return;
+      }
+      if (generation !== menuGeneration) return;
+      if (!writes.length) {
+        summary.classList.add('warn');
+        summary.textContent = 'That bundle held no save files.';
+        return;
+      }
+      try {
+        ensureDir(SAVE_DIR);
+        writes.forEach(function(w) { FS.writeFile(w.path, w.data); });
+      } catch (e) {
+        console.error('[WebSaves] import failed:', e);
+        summary.classList.add('warn');
+        summary.textContent = 'The browser refused the write. Private browsing blocks storage, and a full browser can refuse it too.';
+        return;
+      }
+      if (landed) summary.textContent = 'Imported into file ' + landed + '.';
+      syncIdbfs(false).then(function(ok) {
+        if (generation !== menuGeneration) return;
+        renderSlots(generation);
+        if (!ok) {
+          summary.classList.add('warn');
+          summary.textContent =
+            'The browser would not save that to storage, so the import will be gone on reload. ' +
+            'Private browsing blocks storage for a site, and a full browser can refuse it too.';
+        }
+      });
+    }
 
     // == Clear cached files =================================================
     function archiveSizes() {
