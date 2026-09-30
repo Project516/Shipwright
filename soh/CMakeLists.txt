@@ -860,10 +860,12 @@ if(EMSCRIPTEN)
     set_property(TARGET ${PROJECT_NAME} APPEND PROPERTY LINK_DEPENDS
         "${SOH_WEB_DIR}/shell.html"
         "${SOH_WEB_DIR}/asyncify-remove.txt"
+        "${SOH_WEB_DIR}/ship-prow.png"
         "${SOH_WEB_BUNDLED_ARCHIVE}"
     )
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SOH_WEB_DIR}/coi-serviceworker.js" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/coi-serviceworker.js"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${SOH_WEB_DIR}/ship-prow.png" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/ship-prow.png"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/assets/custom/fonts/Montserrat-Regular.ttf" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/Montserrat-Regular.ttf"
     )
 endif()

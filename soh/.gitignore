@@ -54,6 +54,8 @@ graphs/
 *.mtl
 *.fbx
 !*_custom*
+# The web shell ships this one; the browser loads it by name.
+!soh/web/ship-prow.png
 .extracted-assets.json
 
 # Docs
