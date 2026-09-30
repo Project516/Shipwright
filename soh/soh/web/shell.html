@@ -537,6 +537,9 @@
       el('saves-summary').textContent = 'Exported ' + bundle.count + ' file' + (bundle.count > 1 ? 's' : '') + '.';
     });
 
+    // Every write below is followed by syncIdbfs(false) before this handler can finish, so
+    // a save is always in IndexedDB before anything unmounts the filesystem. The sync is at
+    // the end of the change handler, after the writes.
     el('import-saves').addEventListener('click', function() {
       var input = document.createElement('input');
       input.type = 'file';
@@ -546,6 +549,7 @@
         if (!file) return;
         var summary = el('saves-summary');
         var generation = menuGeneration;
+        // Handled below: decode, write, then syncIdbfs(false) to persist.
         file.arrayBuffer().then(function(buffer) {
           if (generation !== menuGeneration) return;
           // Decoded and validated up front, so a bad entry cannot leave half a bundle
