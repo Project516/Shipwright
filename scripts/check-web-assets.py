@@ -108,7 +108,7 @@ def main(argv: list[str]) -> int:
     nested = [p for p in sources if p.parent != site]
 
     if not refs and not root_absolute:
-        print("found no local references in index.html, so the check proved nothing", file=sys.stderr)
+        print("found no local references, so the check proved nothing", file=sys.stderr)
         return 1
 
     missing = []
@@ -124,13 +124,15 @@ def main(argv: list[str]) -> int:
         if not found:
             missing.append(ref)
 
+    # A warning, not a failure. A root-absolute path breaks under a Pages subpath but is
+    # correct when the site is served from a domain root, and the check cannot tell which.
     for ref in root_absolute:
-        print(f"root-absolute reference will 404 under a Pages subpath: {ref}", file=sys.stderr)
+        print(f"warning: root-absolute reference, which 404s under a Pages subpath: {ref}", file=sys.stderr)
 
     for ref in missing:
         print(f"missing from the staged site: {ref}", file=sys.stderr)
 
-    if missing or root_absolute:
+    if missing:
         return 1
     print(f"all {len(refs)} local references are present in {site}")
     return 0

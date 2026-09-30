@@ -389,7 +389,10 @@
     }
 
     // Safari and the iOS browsers all use the same engine, and Safari is the one that
-    // filters a file list by extension and drops what it cannot classify.
+    // filters a file list by extension and drops what it cannot classify. The exclusion
+    // list is for the browsers that carry Safari in their user agent without being Safari,
+    // which today means the iOS builds of Chrome, Firefox and Edge. Recheck it if one of
+    // them reports this too.
     function isSafari() {
       return /^((?!chrome|android|crios|fxios|edgios).)*safari/i.test(navigator.userAgent);
     }
