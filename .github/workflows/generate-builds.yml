@@ -368,9 +368,29 @@ jobs:
     - name: Stage site
       run: |
         mkdir -p soh-web
-        cp build-web/soh/soh.html soh-web/index.html
-        cp build-web/soh/soh.js build-web/soh/soh.wasm build-web/soh/soh.data soh-web/
-        cp build-web/soh/coi-serviceworker.js build-web/soh/Montserrat-Regular.ttf soh-web/
+        # Copy the whole build output. Listing files here dropped ship-prow.png, so the
+        # prow 404'd on the deployed page.
+        cp -r build-web/soh/. soh-web/
+        mv soh-web/soh.html soh-web/index.html
+    - name: Check the staged site has every asset the page asks for
+      run: |
+        missing=0
+        for asset in $(grep -oE '(src|href)="[^"]+"' soh-web/index.html |
+                       grep -oE '"[^"]+"' | tr -d '"' |
+                       grep -vE '^(https?:|//|#|data:)'); do
+          if [ ! -f "soh-web/$asset" ]; then
+            echo "missing from the staged site: $asset"
+            missing=1
+          fi
+        done
+        for asset in $(grep -oE "url\('[^']+'\)" soh-web/index.html |
+                       sed "s/url('//;s/')//" | grep -vE '^(https?:|//|data:)'); do
+          if [ ! -f "soh-web/$asset" ]; then
+            echo "missing from the staged site: $asset"
+            missing=1
+          fi
+        done
+        test "$missing" -eq 0
     - name: Upload build
       uses: actions/upload-artifact@v7
       with:
