@@ -35,10 +35,6 @@ def _no_duplicates(loader, node, deep=False):
 
 DupLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_duplicates)
 
-# The events under on: are not jobs, and a job id may start with an underscore.
-EVENT_KEYS = {"push", "pull_request", "schedule", "workflow_dispatch", "workflow_call", "branch_protection_rule"}
-
-
 def main(argv: list[str]) -> int:
     root = pathlib.Path(argv[1] if len(argv) > 1 else ".github/workflows")
     if not root.is_dir():
