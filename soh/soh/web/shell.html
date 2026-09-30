@@ -25,19 +25,18 @@
       --error: rgb(220, 90, 80);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
       background: var(--bg);
       color: var(--text);
       font-family: 'Montserrat', system-ui, sans-serif;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
       overflow: hidden;
     }
     #canvas-container { position: fixed; inset: 0; display: none; }
     canvas#canvas { display: block; width: 100%; height: 100%; background: rgb(0, 0, 0); }
+    .stage { flex: 1; display: flex; align-items: center; justify-content: center; overflow-y: auto; }
     .screen {
       display: flex;
       flex-direction: column;
@@ -48,8 +47,15 @@
       width: 100%;
       text-align: center;
     }
-    .screen h1 { font-size: 1.5rem; font-weight: 400; letter-spacing: 1px; }
-    .screen p { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+    .prow { width: clamp(84px, 21vw, 124px); height: auto; display: block; }
+    h1 { font-size: 1.5rem; font-weight: 400; letter-spacing: 1px; }
+    .tag {
+      margin-top: -8px;
+      font-size: 0.62rem;
+      letter-spacing: 0.34em;
+      text-indent: 0.34em;
+      color: var(--faint);
+    }
     #exit-screen { display: none; }
     #progress-wrap {
       width: 100%;
@@ -76,7 +82,7 @@
       animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .note { color: var(--faint) !important; font-size: 0.75rem !important; }
+    .note { color: var(--faint); font-size: 0.75rem; line-height: 1.6; }
 
     /* Matches UIWidgets::PushStyleButton */
     button {
@@ -92,9 +98,44 @@
     button:hover { background: var(--accent-hover); }
     button:active { background: var(--accent-active); }
     button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+    button[disabled] { opacity: 0.45; cursor: default; }
+    button[disabled]:hover { background: var(--accent); }
     button.secondary { background: var(--frame); }
-    button.secondary:hover { background: rgba(38, 38, 38, 0.8); }
+    button.secondary:hover { background: rgba(56, 56, 56, 0.9); }
+    button.secondary[disabled]:hover { background: var(--frame); }
+    button.ghost { background: transparent; border: 1px solid var(--frame); color: var(--muted); }
+    button.ghost:hover { background: var(--frame); color: var(--text); }
+    button.ghost[disabled]:hover { background: transparent; }
+    button.small { font-size: 0.82rem; padding: 6px 16px; }
+    button.link { background: none; border: none; color: var(--muted); font-size: 0.8rem; padding: 4px 8px; }
+    button.link:hover { background: none; color: var(--text); }
     #start-button { display: none; font-size: 1.1rem; padding: 10px 28px; }
+
+    .actions { display: none; flex-direction: column; align-items: center; gap: 10px; width: 100%; max-width: 260px; }
+    .actions.show { display: flex; }
+
+    .panel { display: none; width: 100%; max-width: 420px; text-align: left; }
+    .panel.show { display: block; }
+    .panel h2 { font-size: 1rem; font-weight: 400; letter-spacing: 1px; margin-bottom: 4px; }
+    .panel p { color: var(--muted); font-size: 0.78rem; line-height: 1.6; }
+    .slots { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+    .slot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: var(--frame);
+      border-radius: 3px;
+      padding: 10px 12px;
+    }
+    .slot .meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .slot .name { font-size: 0.85rem; }
+    .slot .sub { font-size: 0.7rem; color: var(--faint); }
+    .slot.empty .name { color: var(--faint); }
+    .row { display: flex; gap: 8px; margin-top: 16px; }
+    .row > button { flex: 1; }
+    .summary { margin-top: 12px; font-size: 0.72rem; color: var(--faint); line-height: 1.6; }
+    .summary.warn { color: var(--error); }
 
     /* File prompt created by WebUtils.cpp, styled like the in-game popups */
     .soh-prompt {
@@ -116,27 +157,89 @@
     .soh-prompt-panel p { margin: 0 0 16px 0; font-size: 1rem; }
     .soh-prompt-panel button { margin: 0 6px; }
     .soh-prompt-panel button:last-of-type { background: var(--frame); }
+
+    .foot {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      padding: 10px 0 calc(10px + env(safe-area-inset-bottom));
+    }
+    .gh {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 3px;
+      color: var(--faint);
+    }
+    .gh:hover { color: var(--text); background: var(--frame); }
+    .gh svg { width: 20px; height: 20px; fill: currentColor; }
   </style>
 </head>
 <body>
-  <!-- Loading screen -->
-  <div id="loading-screen" class="screen">
-    <h1>Ship of Harkinian</h1>
-    <div id="spinner"></div>
-    <p id="status" role="status">Loading...</p>
-    <div id="progress-wrap"><div id="progress-bar"></div></div>
-    <button id="start-button">Start</button>
-    <p class="note">
-      The first time, you will be asked for your own Ocarina of Time ROM.<br/>
-      It is converted inside this tab and kept in this browser. Nothing is uploaded.
-    </p>
+  <div class="stage">
+    <!-- Loading screen -->
+    <div id="loading-screen" class="screen">
+      <img class="prow" id="prow" src="ship-prow.png" alt=""/>
+      <div>
+        <h1>Ship of Harkinian</h1>
+        <p class="tag">WASM PORT</p>
+      </div>
+      <div id="spinner"></div>
+      <p id="status" role="status">Loading...</p>
+      <div id="progress-wrap"><div id="progress-bar"></div></div>
+      <div class="actions" id="actions">
+        <button id="start-button">Start</button>
+        <button class="secondary small" id="saves-button">Saves</button>
+        <button class="ghost small" id="cache-button">Clear cache</button>
+      </div>
+
+      <section class="panel" id="saves-panel">
+        <h2>Saves</h2>
+        <p>Saves live in this browser. Export them before clearing site data or moving to another device.</p>
+        <ul class="slots" id="slots"></ul>
+        <div class="row">
+          <button class="secondary small" id="export-all">Export all</button>
+          <button class="secondary small" id="import-saves">Import</button>
+        </div>
+        <p class="summary" id="saves-summary"></p>
+        <div class="row"><button class="link" id="saves-back">Back</button></div>
+      </section>
+
+      <section class="panel" id="cache-panel">
+        <h2>Clear cached files</h2>
+        <p id="cache-text"></p>
+        <div class="row">
+          <button class="secondary small" id="cache-cancel">Cancel</button>
+          <button class="small" id="cache-confirm">Clear files</button>
+        </div>
+      </section>
+
+      <section class="panel" id="cache-done">
+        <h2>Cache cleared</h2>
+        <p>The extracted game files are gone from this browser. Start again and you will be asked for your ROM so they can be rebuilt.</p>
+        <div class="row"><button class="small" id="cache-done-ok">Back</button></div>
+      </section>
+
+      <p class="note" id="note">
+        The first time, you will be asked for your own Ocarina of Time ROM.<br/>
+        It is converted inside this tab and kept in this browser. Nothing is uploaded.
+      </p>
+    </div>
+
+    <!-- Shown after the game quits or crashes; the canvas would otherwise keep its last frame -->
+    <div id="exit-screen" class="screen">
+      <h1>Ship of Harkinian</h1>
+      <p id="exit-message"></p>
+      <button onclick="location.reload()">Start again</button>
+    </div>
   </div>
 
-  <!-- Shown after the game quits or crashes; the canvas would otherwise keep its last frame -->
-  <div id="exit-screen" class="screen">
-    <h1>Ship of Harkinian</h1>
-    <p id="exit-message"></p>
-    <button onclick="location.reload()">Start again</button>
+  <div class="foot" id="foot">
+    <a class="gh" id="gh-link" href="https://github.com/Project516/Shipwright" target="_blank" rel="noopener" title="Source on GitHub" aria-label="Source on GitHub">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+    </a>
   </div>
 
   <div id="canvas-container">
@@ -148,14 +251,431 @@
 
   <script>
     function el(id) { return document.getElementById(id); }
+
+    // App directory, matches Context::GetAppDirectoryPath for __EMSCRIPTEN__.
+    var STORAGE_DIR = '/storage';
+    var SAVE_DIR = STORAGE_DIR + '/Save';
+    // Archives ZAPD writes next to the saves. soh.o2r is preloaded into the wasm data, so it is
+    // not in IndexedDB and cannot be cleared here.
+    var ARCHIVES = ['oot.o2r', 'oot-mq.o2r'];
+
     function showOnly(id) {
       el('loading-screen').style.display = id === 'loading-screen' ? 'flex' : 'none';
       el('exit-screen').style.display = id === 'exit-screen' ? 'flex' : 'none';
       el('canvas-container').style.display = id === 'canvas-container' ? 'block' : 'none';
+      // The canvas covers the viewport, so the link would sit on top of the game.
+      el('foot').style.display = id === 'canvas-container' ? 'none' : 'flex';
     }
     function setProgress(fraction) {
       el('progress-bar').style.transform = 'scaleX(' + Math.max(0, Math.min(1, fraction)) + ')';
     }
+    function setStatus(text, kind) {
+      var node = el('status');
+      node.textContent = text;
+      node.classList.remove('error');
+      if (kind) node.classList.add(kind);
+    }
+
+    // The panel under the title swaps in place, so the progress bar and the ROM note step aside.
+    function showPanel(id) {
+      ['actions', 'saves-panel', 'cache-panel', 'cache-done'].forEach(function(name) {
+        el(name).classList.toggle('show', name === id);
+      });
+      var onMenu = id === 'actions';
+      // The spinner is hidden once loading is done, so returning to the action list
+      // must not bring it back.
+      ['progress-wrap', 'note'].forEach(function(name) {
+        el(name).style.display = onMenu ? '' : 'none';
+      });
+      if (!onMenu) el('spinner').style.display = 'none';
+    }
+
+    // == Save import and export ==============================================
+    // The pre-load screen runs before InitOTR mounts IDBFS, so the menu mounts it
+    // itself while it is open and unmounts before the game takes over. The game
+    // mounts the same directory fresh in WebStorage_Mount, so the two never overlap.
+    var storageMounted = false;
+
+    function syncIdbfs(populate) {
+      return new Promise(function(resolve) {
+        FS.syncfs(!!populate, function(err) {
+          if (err) console.error('[WebStorage] sync failed:', err);
+          resolve(!err);
+        });
+      });
+    }
+
+    // Emscripten's FS errors carry a code, which is the only way to tell the expected
+    // EEXIST from a real failure such as the filesystem being full.
+    function isEexist(e) {
+      return e && (e.code === 'EEXIST' || e.errno === 20);
+    }
+
+    function isEnoent(e) {
+      return e && (e.code === 'ENOENT' || e.errno === 44);
+    }
+
+    function mountStorage() {
+      if (storageMounted) return Promise.resolve(true);
+      return new Promise(function(resolve) {
+        try {
+          FS.mkdir(STORAGE_DIR);
+        } catch (e) {
+          if (!isEexist(e)) {
+            console.error('[WebStorage] could not create the storage directory:', e);
+            resolve(false);
+            return;
+          }
+        }
+        try {
+          FS.mount(IDBFS, {}, STORAGE_DIR);
+        } catch (e) {
+          console.error('[WebStorage] mount failed:', e);
+          resolve(false);
+          return;
+        }
+        // FS.mount and the flag above are synchronous, so a close cannot land between
+        // them. Once this returns, storageMounted is true and unmountStorage will unmount.
+        storageMounted = true;
+        syncIdbfs(true).then(resolve);
+      });
+    }
+
+    // Deferred work checks this before touching the filesystem, so a callback that lands
+    // after the menu closed cannot write into the mount the game now owns.
+    var menuGeneration = 0;
+
+    function unmountStorage() {
+      // Bumped even when nothing is mounted, so a pending callback that arrives after the
+      // menu closed is still discarded.
+      menuGeneration++;
+      if (!storageMounted) return;
+      storageMounted = false;
+      try {
+        FS.unmount(STORAGE_DIR);
+      } catch (e) {
+        console.error('[WebStorage] unmount failed:', e);
+      }
+    }
+
+    function savePath(n) { return SAVE_DIR + '/file' + n + '.sav'; }
+
+    // FS.mkdir throws when the directory is already there, which is the normal
+    // case for anyone importing into a browser that already has saves.
+    function ensureDir(path) {
+      try {
+        FS.mkdir(path);
+      } catch (e) {
+        if (!isEexist(e)) throw e;
+      }
+    }
+
+    function readSave(n) {
+      try {
+        return FS.readFile(savePath(n));
+      } catch (e) {
+        if (!isEnoent(e)) console.error('[WebSaves] could not read file' + n + ':', e);
+        return null;
+      }
+    }
+
+    function slotIsUsed(n) {
+      try {
+        return FS.stat(savePath(n)).size > 0;
+      } catch (e) {
+        if (!isEnoent(e)) console.error('[WebSaves] could not stat file' + n + ':', e);
+        return false;
+      }
+    }
+
+    function formatBytes(bytes) {
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    }
+
+    // Saves are bundled as one JSON file of base64 payloads. A zip would need a
+    // dependency, and these are a few hundred KB at most.
+    function bundleSaves() {
+      var files = {};
+      var used = 0;
+      for (var n = 1; n <= 3; n++) {
+        var data = readSave(n);
+        if (data) {
+          files['file' + n + '.sav'] = bytesToBase64(new Uint8Array(data));
+          used++;
+        }
+      }
+      return { format: 'soh-web-saves', version: 1, files: files, count: used };
+    }
+
+    function downloadFile(name, blob) {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      // Revoking immediately can cancel the download in Safari.
+      setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+    }
+
+    function bytesToBase64(bytes) {
+      var binary = '';
+      var chunk = 0x8000;
+      for (var i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+      }
+      return btoa(binary);
+    }
+
+    function base64ToBytes(text) {
+      var binary = atob(text);
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    }
+
+    function saveStamp() {
+      var d = new Date();
+      var p = function(v) { return (v < 10 ? '0' : '') + v; };
+      return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '-' + p(d.getHours()) + p(d.getMinutes());
+    }
+
+    function renderSlots(generation) {
+      if (generation !== undefined && generation !== menuGeneration) return;
+      var list = el('slots');
+      list.textContent = '';
+      var anyUsed = false;
+      for (var n = 1; n <= 3; n++) {
+        var used = slotIsUsed(n);
+        if (used) anyUsed = true;
+        var li = document.createElement('li');
+        li.className = used ? 'slot' : 'slot empty';
+
+        var meta = document.createElement('div');
+        meta.className = 'meta';
+        var name = document.createElement('span');
+        name.className = 'name';
+        name.textContent = 'File ' + n;
+        var sub = document.createElement('span');
+        sub.className = 'sub';
+        if (used) {
+          sub.textContent = formatBytes(FS.stat(savePath(n)).size) + ', in this browser';
+        } else {
+          sub.textContent = 'Empty';
+        }
+        meta.appendChild(name);
+        meta.appendChild(sub);
+
+        var button = document.createElement('button');
+        button.className = 'ghost small';
+        button.textContent = 'Export';
+        button.disabled = !used;
+        button.addEventListener('click', function(event) {
+          var slot = event.target.getAttribute('data-slot');
+          var data = readSave(Number(slot));
+          if (!data) {
+            el('saves-summary').textContent = 'File ' + slot + ' is empty.';
+            return;
+          }
+          downloadFile('soh-save-file' + slot + '-' + saveStamp() + '.sav',
+                   new Blob([data], { type: 'application/octet-stream' }));
+          el('saves-summary').textContent = 'Exported file' + slot + '.';
+        });
+        button.setAttribute('data-slot', String(n));
+
+        li.appendChild(meta);
+        li.appendChild(button);
+        list.appendChild(li);
+      }
+      el('export-all').disabled = !anyUsed;
+      if (!anyUsed) {
+        el('saves-summary').textContent = 'No saves yet. Start the game and save to one of the files.';
+      }
+    }
+
+    function openSaves() {
+      showPanel('saves-panel');
+      el('saves-summary').textContent = 'Reading browser storage...';
+      el('import-saves').disabled = true;
+      var generation = menuGeneration;
+      mountStorage().then(function(ok) {
+        // The menu may have closed, or Start may have taken over the mount, while this ran.
+        if (generation !== menuGeneration) return;
+        if (!ok) {
+          el('saves-summary').textContent = 'Could not read browser storage. Try reloading the page.';
+          el('saves-summary').classList.add('warn');
+          return;
+        }
+        el('saves-summary').classList.remove('warn');
+        renderSlots(generation);
+        el('import-saves').disabled = false;
+      });
+    }
+
+    function closeSaves() {
+      unmountStorage();
+      showPanel('actions');
+    }
+
+    el('saves-button').addEventListener('click', openSaves);
+    el('saves-back').addEventListener('click', closeSaves);
+    el('export-all').addEventListener('click', function() {
+      var bundle = bundleSaves();
+      if (!bundle.count) {
+        el('saves-summary').textContent = 'There are no saves to export.';
+        return;
+      }
+      downloadFile('soh-saves-' + saveStamp() + '.json',
+               new Blob([JSON.stringify(bundle)], { type: 'application/json' }));
+      el('saves-summary').textContent = 'Exported ' + bundle.count + ' file' + (bundle.count > 1 ? 's' : '') + '.';
+    });
+
+    el('import-saves').addEventListener('click', function() {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,.sav';
+      input.addEventListener('change', function() {
+        var file = input.files && input.files[0];
+        if (!file) return;
+        var summary = el('saves-summary');
+        var generation = menuGeneration;
+        file.arrayBuffer().then(function(buffer) {
+          if (generation !== menuGeneration) return;
+          // Decoded and validated up front, so a bad entry cannot leave half a bundle
+          // written to the mounted filesystem.
+          var writes = [];
+          var landed = 0;
+          try {
+            if (/\.json$/i.test(file.name)) {
+              var bundle = JSON.parse(new TextDecoder().decode(buffer));
+              if (bundle.format !== 'soh-web-saves') throw new Error('not a SoH save bundle');
+              Object.keys(bundle.files).forEach(function(key) {
+                if (!/^file[123]\.sav$/.test(key)) return;
+                writes.push({ path: SAVE_DIR + '/' + key, data: base64ToBytes(bundle.files[key]) });
+              });
+            } else if (/^global\.sav$/i.test(file.name)) {
+              throw new Error('global.sav holds settings, not a save');
+            } else {
+              // Save files are named after the slot they belong to, so file2.sav goes to
+              // file 2. Anything else takes the first free slot, or file 1 when all are taken.
+              var named = /^file([123])\.sav$/i.exec(file.name);
+              var target = named ? Number(named[1]) : 0;
+              if (target === 0) {
+                for (var n = 1; n <= 3; n++) {
+                  if (!slotIsUsed(n)) { target = n; break; }
+                }
+              }
+              if (target === 0) target = 1;
+              writes.push({ path: savePath(target), data: new Uint8Array(buffer) });
+              landed = target;
+            }
+          } catch (e) {
+            console.error('[WebSaves] import failed:', e);
+            summary.classList.add('warn');
+            summary.textContent = e.message === 'global.sav holds settings, not a save'
+              ? 'That is the settings file, not a save. Import file1.sav, file2.sav or file3.sav.'
+              : 'That file could not be read as a Ship of Harkinian save.';
+            return;
+          }
+          if (generation !== menuGeneration) return;
+          if (!writes.length) {
+            summary.classList.add('warn');
+            summary.textContent = 'That bundle held no save files.';
+            return;
+          }
+          try {
+            ensureDir(SAVE_DIR);
+            writes.forEach(function(w) { FS.writeFile(w.path, w.data); });
+          } catch (e) {
+            console.error('[WebSaves] import failed:', e);
+            summary.classList.add('warn');
+            summary.textContent = 'The browser refused the write. It may be out of storage space.';
+            return;
+          }
+          if (landed) summary.textContent = 'Imported into file ' + landed + '.';
+          syncIdbfs(false).then(function(ok) {
+            if (generation !== menuGeneration) return;
+            renderSlots();
+            if (!ok) {
+              summary.classList.add('warn');
+              summary.textContent = 'Imported, but writing to browser storage failed. The browser may be out of space.';
+            }
+          });
+        }, function() {
+          if (generation !== menuGeneration) return;
+          summary.classList.add('warn');
+          summary.textContent = 'That file could not be read.';
+        });
+      });
+      input.click();
+    });
+
+    // == Clear cached files =================================================
+    function archiveSizes() {
+      var total = 0;
+      var found = [];
+      ARCHIVES.forEach(function(name) {
+        try {
+          var size = FS.stat(STORAGE_DIR + '/' + name).size;
+          if (size > 0) {
+            found.push(name);
+            total += size;
+          }
+        } catch (e) {
+          // Not extracted yet, nothing to clear.
+        }
+      });
+      return { total: total, found: found };
+    }
+
+    el('cache-button').addEventListener('click', function() {
+      showPanel('cache-panel');
+      el('cache-confirm').disabled = true;
+      var text = el('cache-text');
+      text.textContent = 'Checking browser storage...';
+      var generation = menuGeneration;
+      mountStorage().then(function(ok) {
+        if (generation !== menuGeneration) return;
+        if (!ok) {
+          text.textContent = 'Could not read browser storage. Try reloading the page.';
+          return;
+        }
+        var info = archiveSizes();
+        if (!info.found.length) {
+          text.textContent = 'There are no extracted game files in this browser yet. Your saves are untouched.';
+          return;
+        }
+        el('cache-confirm').disabled = false;
+        text.textContent = 'This deletes ' + info.found.join(' and ') + ', ' + formatBytes(info.total) +
+          ', from this browser. The next start asks for your ROM again and rebuilds them. Your saves are kept.';
+      });
+    });
+
+    el('cache-cancel').addEventListener('click', closeSaves);
+    el('cache-done-ok').addEventListener('click', closeSaves);
+    el('cache-confirm').addEventListener('click', function() {
+      var generation = menuGeneration;
+      ARCHIVES.forEach(function(name) {
+        try {
+          FS.unlink(STORAGE_DIR + '/' + name);
+        } catch (e) {
+          if (!isEnoent(e)) console.error('[WebStorage] could not delete ' + name + ':', e);
+        }
+      });
+      // Write back so the deletion reaches IndexedDB, not just this session's view.
+      syncIdbfs(false).then(function() {
+        if (generation !== menuGeneration) return;
+        unmountStorage();
+        showPanel('cache-done');
+      });
+    });
+
+    // Leaving the menu by any path has to drop the mount, or the game's own
+    // WebStorage_Mount would mount a second time over this one.
+    window.addEventListener('pagehide', unmountStorage);
 
     var Module = {
       canvas: el('canvas'),
@@ -172,9 +692,9 @@
         var m = text.match(/\((\d+(?:\.\d+)?)\/(\d+)\)/);
         if (m) {
           setProgress(parseFloat(m[1]) / parseFloat(m[2]));
-          text = 'Downloading game files...';
+          text = 'Extracting game files...';
         }
-        el('status').textContent = text;
+        setStatus(text);
       },
 
       // Browsers keep audio muted until the page gets a click, so the game waits for Start.
@@ -183,12 +703,15 @@
         addRunDependency('user-start');
         setProgress(1);
         el('spinner').style.display = 'none';
-        el('status').textContent = 'Ready.';
+        setStatus('Ready.');
+        showPanel('actions');
         var button = el('start-button');
         button.style.display = 'inline-block';
         button.focus();
         button.addEventListener('click', function() {
           button.style.display = 'none';
+          // The Saves menu may still hold IDBFS; the game mounts it itself on startup.
+          unmountStorage();
           var AudioContextClass = window.AudioContext || window.webkitAudioContext;
           if (AudioContextClass && !(Module.SDL2 && Module.SDL2.audioContext)) {
             Module.SDL2 = Module.SDL2 || {};
@@ -232,8 +755,7 @@
     window.addEventListener('keydown', resumeGameAudio, true);
 
     window.addEventListener('error', function(e) {
-      el('status').classList.add('error');
-      el('status').textContent = 'Error: ' + e.message;
+      setStatus('Error: ' + e.message, 'error');
     });
   </script>
 
