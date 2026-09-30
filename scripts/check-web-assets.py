@@ -39,9 +39,17 @@ class Refs(html.parser.HTMLParser):
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.refs: list[str] = []
-        self.css: list[str] = []
+        # (reference, directory of the file it came from), so a reference in a
+        # nested page resolves against that page and not against a sibling.
+        self.refs: list[tuple[str, pathlib.Path]] = []
+        self.css: list[tuple[str, pathlib.Path]] = []
+        self._base = pathlib.Path(".")
         self._in_style = False
+
+    def at(self, base: pathlib.Path) -> "Refs":
+        """Collect the next file's references relative to its own directory."""
+        self._base = base
+        return self
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag == "style":
@@ -50,12 +58,12 @@ class Refs(html.parser.HTMLParser):
             if not value:
                 continue
             if name in ("src", "href", "poster", "data"):
-                self.refs.append(value)
+                self.refs.append((value, self._base))
             elif name == "srcset":
                 for part in value.split(","):
                     candidate = part.strip().split(" ", 1)[0]
                     if candidate:
-                        self.refs.append(candidate)
+                        self.refs.append((candidate, self._base))
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "style":
@@ -65,7 +73,7 @@ class Refs(html.parser.HTMLParser):
         # Only inside style elements. Scanning the whole file would match url() calls
         # in the script, such as URL.createObjectURL(blob).
         if self._in_style:
-            self.css.append(data)
+            self.css.append((data, self._base))
 
 
 def main(argv: list[str]) -> int:
@@ -90,39 +98,39 @@ def main(argv: list[str]) -> int:
     parser = Refs()
     for source in sources:
         text = source.read_text(encoding="utf-8", errors="replace")
-        parser.feed(text)
+        parser.at(source.parent).feed(text)
         # A standalone stylesheet is scanned directly, with no style element around it.
         if source.suffix == ".css":
-            parser.css.append(text)
+            parser.css.append((text, source.parent))
 
-    refs = [r for r in (local_path(v) for v in parser.refs) if r]
-    css = "".join(parser.css)
-    refs += [r for r in (local_path(m) for m in (a or b or c for a, b, c in CSS_URL.findall(css))) if r]
-    refs = sorted(set(refs))
+    # Each reference keeps the directory of the file that asked for it.
+    found: list[tuple[str, pathlib.Path]] = []
+    for value, base in parser.refs:
+        ref = local_path(value)
+        if ref:
+            found.append((ref, base))
+    for text, base in parser.css:
+        for a, b, c in CSS_URL.findall(text):
+            ref = local_path(a or b or c)
+            if ref:
+                found.append((ref, base))
 
     root_absolute = sorted({
         html.unescape(v.strip()).split("?", 1)[0].split("#", 1)[0]
-        for v in parser.refs
+        for v, _ in parser.refs
         if v.strip().startswith("/") and not REMOTE.match(v.strip())
     })
-    nested = [p for p in sources if p.parent != site]
 
-    if not refs and not root_absolute:
+    if not found and not root_absolute:
         print("found no local references, so the check proved nothing", file=sys.stderr)
         return 1
 
     missing = []
-    for ref in refs:
-        # A relative reference in a nested file resolves against that file's directory
-        # first, then against the site root.
-        found = False
-        for base in [p.parent for p in nested] + [site]:
-            target = base / ref
-            if target.is_file() or (target.is_dir() and (target / "index.html").is_file()):
-                found = True
-                break
-        if not found:
-            missing.append(ref)
+    for ref, base in found:
+        # Relative to the file that referenced it, and never to a sibling directory.
+        target = base / ref
+        if not (target.is_file() or (target.is_dir() and (target / "index.html").is_file())):
+            missing.append(f"{ref} (from {base})")
 
     # A warning, not a failure. A root-absolute path breaks under a Pages subpath but is
     # correct when the site is served from a domain root, and the check cannot tell which.
@@ -134,7 +142,7 @@ def main(argv: list[str]) -> int:
 
     if missing:
         return 1
-    print(f"all {len(refs)} local references are present in {site}")
+    print(f"all {len(found)} local references are present in {site}")
     return 0
 
 

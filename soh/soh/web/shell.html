@@ -632,7 +632,7 @@
         summary.textContent = 'The browser refused the write. Private browsing blocks storage, and a full browser can refuse it too.';
         return;
       }
-      if (landed) summary.textContent = 'Imported into file ' + landed + '.';
+      // Only call it imported once the browser has actually kept it.
       syncIdbfs(false).then(function(ok) {
         if (generation !== menuGeneration) return;
         renderSlots();
@@ -641,7 +641,9 @@
           summary.textContent =
             'The browser would not save that to storage, so the import will be gone on reload. ' +
             'Private browsing blocks storage for a site, and a full browser can refuse it too.';
+          return;
         }
+        if (landed) summary.textContent = 'Imported into file ' + landed + '.';
       });
     }
 
