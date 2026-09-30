@@ -501,6 +501,7 @@
       el('export-all').disabled = !anyUsed;
       if (!anyUsed) {
         el('saves-summary').textContent = 'No saves yet. Start the game and save to one of the files.';
+        el('saves-summary').classList.remove('warn');
       }
     }
 
@@ -555,6 +556,7 @@
         var file = input.files && input.files[0];
         if (!file) return;
         var summary = el('saves-summary');
+        summary.classList.remove('warn');
         var generation = menuGeneration;
         file.arrayBuffer().then(function(buffer) {
           if (generation !== menuGeneration) return;

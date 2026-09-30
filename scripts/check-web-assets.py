@@ -95,13 +95,24 @@ def main(argv: list[str]) -> int:
         print(f"no html or css in {site}", file=sys.stderr)
         return 1
 
-    parser = Refs()
+    # A fresh parser per file. HTMLParser keeps an unclosed <style> open across feeds, so a
+    # reused parser would swallow the attributes of every file after it and check nothing.
+    refs: list[tuple[str, pathlib.Path]] = []
+    css: list[tuple[str, pathlib.Path]] = []
     for source in sources:
         text = source.read_text(encoding="utf-8", errors="replace")
-        parser.at(source.parent).feed(text)
+        one = Refs()
+        one.at(source.parent)
+        one.feed(text)
+        one.close()
+        refs.extend(one.refs)
+        css.extend(one.css)
         # A standalone stylesheet is scanned directly, with no style element around it.
         if source.suffix == ".css":
-            parser.css.append((text, source.parent))
+            css.append((text, source.parent))
+    parser = Refs()
+    parser.refs = refs
+    parser.css = css
 
     # Each reference keeps the directory of the file that asked for it.
     found: list[tuple[str, pathlib.Path]] = []

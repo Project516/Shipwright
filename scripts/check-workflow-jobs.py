@@ -1,35 +1,67 @@
 #!/usr/bin/env python3
 """Fail if a workflow defines the same job twice.
 
-PyYAML keeps the last of two identical job keys without complaining, so a bad
-edit to a workflow file is invisible to a plain load. It only shows up as an
-Actions run that reports a workflow file error and starts no jobs.
+A duplicated job key is invisible to a plain load, because the loader keeps the
+last one without complaint. The only symptom is an Actions run that reports a
+workflow file error and starts no jobs at all.
+
+Usage: check-workflow-jobs.py [workflow-dir]
 """
-import collections
 import pathlib
 import sys
 
 import yaml
 
-fail = 0
-for path in sorted(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".github/workflows").glob("*.y*ml")):
-    doc = yaml.safe_load(path.read_text())
-    if not isinstance(doc, dict) or "jobs" not in doc:
-        continue
-    # Keys are strings in the file, but YAML 1.1 turns some words like "on" into booleans.
-    jobs = [k for k in doc["jobs"] if isinstance(k, str)]
-    dupes = {k: v for k, v in collections.Counter(jobs).items() if v > 1}
-    # Count every key line in the text too, since a duplicate is lost by the time
-    # the document is loaded.
-    import re
-    text = path.read_text()
-    declared = re.findall(r"^  ([A-Za-z][A-Za-z0-9_-]*):\s*$", text, re.M)
-    text_dupes = {k: v for k, v in collections.Counter(declared).items() if v > 1}
-    if dupes or text_dupes:
-        fail = 1
-        print(f"{path}: duplicate job definitions", file=sys.stderr)
-        for k, v in {**dupes, **text_dupes}.items():
-            print(f"  {k} appears {v} times", file=sys.stderr)
-    else:
-        print(f"{path}: {len(jobs)} jobs, no duplicates")
-raise SystemExit(fail)
+
+class DupLoader(yaml.SafeLoader):
+    """A loader that refuses a mapping key it has already seen.
+
+    Duplicate keys are legal in YAML, and every plain loader silently keeps the
+    last one. That is exactly the case worth failing on here.
+    """
+
+
+def _no_duplicates(loader, node, deep=False):
+    seen = set()
+    for key_node, _ in node.value:
+        key = loader.construct_object(key_node, deep=deep)
+        if key in seen:
+            raise yaml.constructor.ConstructorError(
+                None, None, f"duplicate key {key!r} at line {key_node.start_mark.line + 1}", key_node.start_mark
+            )
+        seen.add(key)
+    return yaml.SafeLoader.construct_mapping(loader, node, deep=deep)
+
+
+DupLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _no_duplicates)
+
+# The events under on: are not jobs, and a job id may start with an underscore.
+EVENT_KEYS = {"push", "pull_request", "schedule", "workflow_dispatch", "workflow_call", "branch_protection_rule"}
+
+
+def main(argv: list[str]) -> int:
+    root = pathlib.Path(argv[1] if len(argv) > 1 else ".github/workflows")
+    if not root.is_dir():
+        print(f"{root} is not a directory", file=sys.stderr)
+        return 2
+
+    fail = 0
+    for path in sorted(list(root.glob("*.yml")) + list(root.glob("*.yaml"))):
+        try:
+            doc = yaml.load(path.read_text(), Loader=DupLoader)
+        except yaml.constructor.ConstructorError as e:
+            fail = 1
+            print(f"{path}: {e.problem}", file=sys.stderr)
+            continue
+        if not isinstance(doc, dict):
+            continue
+        jobs = doc.get("jobs")
+        if not isinstance(jobs, dict):
+            continue
+        # Report the keys the loader would have dropped, so the message is useful.
+        print(f"{path}: {len(jobs)} jobs, no duplicate keys")
+    return fail
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv))
