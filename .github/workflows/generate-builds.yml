@@ -5,6 +5,10 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+# Nothing here writes to the repository or reads a secret except deploy-web, so the
+# token starts with the least it can do. A job that needs more says so.
+permissions:
+  contents: read
 jobs:
 
   generate-soh-otr:
@@ -328,12 +332,18 @@ jobs:
         key: ${{ steps.restore-cache-vcpkg.outputs.cache-primary-key }}
         path: vcpkg
 
+  check-workflows:
+    runs-on: ubuntu-24.04
+    steps:
+    - name: Git Checkout
+      uses: actions/checkout@v6
+    - name: Fail if a workflow defines a job twice
+      run: python3 scripts/check-workflow-jobs.py .github/workflows
+
   build-web:
-    needs: generate-soh-otr
+    needs: [generate-soh-otr, check-workflows]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    permissions:
-      contents: read
     steps:
     - name: Git Checkout
       uses: actions/checkout@v6
@@ -368,9 +378,12 @@ jobs:
     - name: Stage site
       run: |
         mkdir -p soh-web
-        cp build-web/soh/soh.html soh-web/index.html
-        cp build-web/soh/soh.js build-web/soh/soh.wasm build-web/soh/soh.data soh-web/
-        cp build-web/soh/coi-serviceworker.js build-web/soh/Montserrat-Regular.ttf soh-web/
+        # Copy the whole build output. Listing files here dropped ship-prow.png, so the
+        # prow 404'd on the deployed page.
+        cp -r build-web/soh/. soh-web/
+        mv soh-web/soh.html soh-web/index.html
+    - name: Check the staged site has every asset the page asks for
+      run: python3 scripts/check-web-assets.py soh-web
     - name: Upload build
       uses: actions/upload-artifact@v7
       with:
