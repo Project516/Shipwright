@@ -49,6 +49,11 @@ std::string Extract(std::vector<uint8_t> rom, const std::string& srcDir, const s
 
         // Init is the whole run; it calls Process() internally.
         companion->Init(ExportType::Binary);
+#ifdef __EMSCRIPTEN__
+        // Torch's web build leaves Process() to the caller.
+        std::atomic<size_t> assetCount{ 0 };
+        companion->Process(assetCount);
+#endif
 
         // config.yml names the archive per rom; ask rather than guess, and ask before the
         // companion goes away.
