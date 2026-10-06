@@ -288,6 +288,12 @@ add_subdirectory(torch SYSTEM)
 quiet_dependency_tree(${CMAKE_CURRENT_SOURCE_DIR}/torch)
 
 target_compile_definitions(torch INTERFACE YAML_CPP_STATIC_DEFINE)
+if(EMSCRIPTEN)
+    # Embind bindings for torch's own browser tool; the game does not use them.
+    get_target_property(TORCH_SOURCES torch SOURCES)
+    list(FILTER TORCH_SOURCES EXCLUDE REGEX "/src/lib/web\\.cpp$")
+    set_target_properties(torch PROPERTIES SOURCES "${TORCH_SOURCES}")
+endif()
 
 # Build-time ROM extraction. soh links torch as a static library, which compiles out torch's
 # own CLI, so this supplies an entry point around the same code the game runs.
