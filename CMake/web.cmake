@@ -1,4 +1,4 @@
-# Browser build, configured with emcmake. SDL2, zlib and libpng come from
+# Browser build, configured with emcmake. SDL2, SDL2_net, zlib and libpng come from
 # emscripten ports; everything else is fetched and built from source with the
 # same -pthread flags so every object can share wasm memory.
 
@@ -13,13 +13,13 @@ set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(USE_OPENGLES ON CACHE BOOL "" FORCE)
 add_compile_definitions(USE_OPENGLES=1)
 
-set(WEB_PORT_FLAGS -sUSE_SDL=2 -sUSE_ZLIB=1 -sUSE_LIBPNG=1)
+set(WEB_PORT_FLAGS -sUSE_SDL=2 -sUSE_SDL_NET=2 -sUSE_ZLIB=1 -sUSE_LIBPNG=1)
 add_compile_options(-pthread -fexceptions ${WEB_PORT_FLAGS})
 add_link_options(-pthread -fexceptions ${WEB_PORT_FLAGS})
 
 # The find modules below need the port libraries on disk at configure time.
 execute_process(
-    COMMAND ${EMSCRIPTEN_ROOT_PATH}/embuilder build zlib libpng-mt sdl2-mt
+    COMMAND ${EMSCRIPTEN_ROOT_PATH}/embuilder build zlib libpng-mt sdl2-mt sdl2_net
     RESULT_VARIABLE WEB_EMBUILDER_RESULT
 )
 if(NOT WEB_EMBUILDER_RESULT EQUAL 0)
@@ -42,6 +42,7 @@ set_target_properties(SDL2::SDL2 PROPERTIES
 )
 set(SDL2_FOUND TRUE)
 set(SDL2_INCLUDE_DIRS "")
+add_library(SDL2_net::SDL2_net INTERFACE IMPORTED GLOBAL)
 
 set(tinyxml2_BUILD_TESTING OFF)
 FetchContent_Declare(tinyxml2
@@ -146,6 +147,6 @@ add_library(Vorbis::vorbis ALIAS vorbis)
 add_library(Vorbis::vorbisenc ALIAS vorbisenc)
 add_library(Vorbis::vorbisfile ALIAS vorbisfile)
 add_library(Opusfile::Opusfile ALIAS opusfile)
-foreach(pkg OpusFile Opusfile)
+foreach(pkg OpusFile Opusfile SDL2_net)
     file(WRITE "${CMAKE_FIND_PACKAGE_REDIRECTS_DIR}/${pkg}Config.cmake" "")
 endforeach()
