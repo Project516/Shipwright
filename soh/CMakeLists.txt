@@ -848,6 +848,8 @@ if(EMSCRIPTEN)
         -sASYNCIFY_STACK_SIZE=8388608
         "-sASYNCIFY_REMOVE=@${SOH_WEB_DIR}/asyncify-remove.txt"
         -sASSERTIONS=1
+        # A call that mismatches its definition's signature links as a trap; fail the link instead.
+        -Wl,--fatal-warnings
         -sFORCE_FILESYSTEM=1
         -sEXPORTED_FUNCTIONS=_main,_malloc,_free
         -sEXPORTED_RUNTIME_METHODS=FS,ccall,cwrap,UTF8ToString,stringToUTF8
