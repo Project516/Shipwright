@@ -71,9 +71,10 @@ bool SaveManager::WriteFileSafely(const std::filesystem::path& fileName, const s
     bool written =
         w != nullptr && fwrite(contents.c_str(), 1, contents.length(), w) == contents.length() && fflush(w) == 0;
     // Push data from OS cache to disk. Without this system crash after rename can leave file at full size but zeroed
+    // On web WebStorage persists saves, and fsync from this thread would abort: it has to suspend the main thread.
 #ifdef _WIN32
     written = written && _commit(_fileno(w)) == 0;
-#elif !defined(__SWITCH__) && !defined(__WIIU__)
+#elif !defined(__SWITCH__) && !defined(__WIIU__) && !defined(__EMSCRIPTEN__)
     written = written && fsync(fileno(w)) == 0;
 #endif
     if (w != nullptr) {
