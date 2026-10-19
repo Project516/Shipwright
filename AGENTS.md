@@ -14,6 +14,7 @@ A fork of [HarbourMasters/Shipwright](https://github.com/HarbourMasters/Shipwrig
 - `master` is the default branch. Every change lands through a PR into `master`; nothing is sent upstream.
 - `project516-review-bot` reviews PRs. `generate-builds` CI must be green, including `build-web`.
 - `libultraship` points at `Project516/libultraship`, branch `soh-web`: the commit the current upstream release pins, plus the Ghostship web commits. Moving to a new release rebases that branch onto the new pin.
+- A release rebase PR conflicts with `master`, so GitHub skips its `pull_request` CI. Push the PR head to a scratch branch to get a `push` run, and delete that branch after. The rebase lands by force-pushing `master` once that run is green, after tagging the old head `pre-<version>-master`.
 - On a Raspberry Pi, build with a low `-j` under a memory guard; a full parallel emscripten build can lock the machine up.
 
 ## Glossary

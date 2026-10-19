@@ -300,8 +300,8 @@ jobs:
         # prow 404'd on the deployed page.
         cp -r build-web/soh/. soh-web/
         mv soh-web/soh.html soh-web/index.html
-        # The extractor YAML is preloaded into soh.data; the loose copy is for desktop builds.
-        rm -rf soh-web/assets
+        # assets and web/soh.o2r are already preloaded into soh.data; the rest is CMake output.
+        rm -rf soh-web/assets soh-web/web soh-web/CMakeFiles soh-web/cmake_install.cmake
     - name: Check the staged site has every asset the page asks for
       run: python3 scripts/check-web-assets.py soh-web
     - name: Upload build
